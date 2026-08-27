@@ -64,7 +64,8 @@ def next_action(results: list[StepResult], include_readiness: bool) -> str:
     if failed(results, "github"):
         return (
             "GitHub-Adminfähigkeit zuerst read-only prüfen: "
-            "python3 Scripts/github_p0_admin.py --doctor; erst nach PASS Branch Protection anwenden."
+            "python3 Scripts/github_p0_admin.py --doctor; erst nach PASS das unabhängig lesbare Ruleset mit "
+            "python3 Scripts/github_p0_admin.py --apply-ruleset anwenden."
         )
     if not include_readiness:
         return "Auf der UE-5.8-Maschine fortsetzen: python3 Scripts/p0_preflight.py --full"
@@ -72,7 +73,7 @@ def next_action(results: list[StepResult], include_readiness: bool) -> str:
         return "UE-Maschine reparieren und Readiness erneut ausführen."
     return (
         "Alle Vorbedingungen sind PASS. Frische Evidence jetzt mit "
-        "python3 Scripts/github_p0_admin.py --apply --enable-runner-variable freigeben; "
+        "python3 Scripts/github_p0_admin.py --apply-ruleset --enable-runner-variable freigeben; "
         "danach CP1 UE 5.8 Runtime ausführen."
     )
 
