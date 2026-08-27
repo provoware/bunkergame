@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""One-command, read-only P0 preflight for BUNKER BEATS.
-
-This orchestrator never changes GitHub settings and never claims CP1 runtime PASS.
-It combines already-existing gates into one layperson-friendly status matrix.
-"""
+"""One-command, read-only P0 preflight for BUNKER BEATS."""
 
 from __future__ import annotations
 
@@ -35,6 +31,7 @@ class StepResult:
 
 
 BASE_STEPS = (
+    Step("branch", "Branch-Lifecycle", (sys.executable, "Scripts/branch_lifecycle_guard.py")),
     Step("static", "Statische Projektprüfung", (sys.executable, "Scripts/ci_verify.py")),
     Step("quality", "Repository-Qualität", (sys.executable, "Scripts/repo_quality.py")),
     Step("github", "GitHub P0 Branch-Gate", (sys.executable, "Scripts/github_p0_status.py")),
@@ -52,18 +49,23 @@ def run_step(step: Step) -> StepResult:
     return StepResult(step, result.returncode)
 
 
+def failed(results: list[StepResult], key: str) -> bool:
+    item = next((result for result in results if result.step.key == key), None)
+    return item is None or not item.passed
+
+
 def next_action(results: list[StepResult], include_readiness: bool) -> str:
-    by_key = {item.step.key: item for item in results}
-    if not by_key.get("static", StepResult(BASE_STEPS[0], 1)).passed:
+    if failed(results, "branch"):
+        return "Neuen Arbeitsbranch vom aktuellen main erstellen; gemergten Feature-Branch nicht weiterverwenden."
+    if failed(results, "static"):
         return "Statische Fehler zuerst beheben: python3 Scripts/ci_verify.py"
-    if not by_key.get("quality", StepResult(BASE_STEPS[1], 1)).passed:
+    if failed(results, "quality"):
         return "Quality Guard zuerst reparieren: python3 Scripts/repo_quality.py"
-    if not by_key.get("github", StepResult(BASE_STEPS[2], 1)).passed:
+    if failed(results, "github"):
         return "main schützen: python3 Scripts/github_p0_admin.py --apply"
     if not include_readiness:
         return "Auf der UE-5.8-Maschine fortsetzen: python3 Scripts/p0_preflight.py --full"
-    readiness = by_key.get("readiness")
-    if readiness is None or not readiness.passed:
+    if failed(results, "readiness"):
         return "UE-Maschine reparieren und Readiness erneut ausführen."
     return (
         "Alle Vorbedingungen sind PASS. Frische Evidence jetzt mit "
@@ -77,12 +79,12 @@ def summary(results: list[StepResult], include_readiness: bool) -> int:
     for item in results:
         print(f"[{'PASS' if item.passed else 'FAIL'}] {item.step.title}")
 
-    failed = [item for item in results if item.step.required and not item.passed]
+    failures = [item for item in results if item.step.required and not item.passed]
     print(f"\nNÄCHSTER SCHRITT: {next_action(results, include_readiness)}")
-    state = "PASS" if not failed else "INCOMPLETE"
+    state = "PASS" if not failures else "INCOMPLETE"
     print(f"P0_PREFLIGHT: {state}")
     print("Hinweis: P0_PREFLIGHT: PASS ist kein CP1-Runtime-PASS.")
-    return 0 if not failed else 2
+    return 0 if not failures else 2
 
 
 def main() -> int:
@@ -103,8 +105,7 @@ def main() -> int:
     if args.full:
         steps.append(READINESS_STEP)
 
-    results = [run_step(step) for step in steps]
-    return summary(results, args.full)
+    return summary([run_step(step) for step in steps], args.full)
 
 
 if __name__ == "__main__":

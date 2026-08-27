@@ -10,14 +10,16 @@
 2. `WICHTIG.md` lesen — dort steht der aktuelle Verbesserungsfokus.
 3. `Docs/TODO.md` prüfen — nur eine Aufgabe wählen, die den aktuellen Engpass reduziert.
 4. Branch vom aktuellen `main` erstellen.
-5. Ursache nachvollziehen und kleinste sinnvolle Änderung umsetzen.
-6. lokale Prüfungen ausführen.
-7. Dokumentation synchronisieren.
-8. `WICHTIG.md` mit **genau einem neuen aktuellen Verbesserungsvorschlag** für die Iteration ersetzen/aktualisieren.
-9. in `CODEQUALITÄT.md` **genau einen neuen Eintrag anhängen** — niemals alte Einträge löschen oder umschreiben.
-10. PR mit Evidence, Risiko, Rollback und nächstem Gate öffnen/aktualisieren.
-11. Required Checks abwarten.
-12. nur nach erfüllter Definition of Done mergen.
+5. `python3 Scripts/branch_lifecycle_guard.py` ausführen und sicherstellen, dass der Arbeitsbranch nicht bereits gemergt wurde.
+6. Ursache nachvollziehen und kleinste sinnvolle Änderung umsetzen.
+7. lokale Prüfungen ausführen.
+8. Dokumentation synchronisieren.
+9. `WICHTIG.md` mit **genau einem neuen aktuellen Verbesserungsvorschlag** für die Iteration ersetzen/aktualisieren.
+10. in `CODEQUALITÄT.md` **genau einen neuen Eintrag anhängen** — niemals alte Einträge löschen oder umschreiben.
+11. PR mit Evidence, Risiko, Rollback und nächstem Gate öffnen/aktualisieren.
+12. Required Checks abwarten.
+13. nur nach erfüllter Definition of Done mergen.
+14. Nach Merge den Feature-Branch als abgeschlossen behandeln; neue Arbeit beginnt auf einem neuen Branch vom aktuellen `main`.
 
 ---
 
@@ -33,6 +35,35 @@
 | Test | `test/...` | `test/cp1-boundaries` |
 
 Ein Branch soll möglichst **einen logischen Zweck** haben.
+
+### Branch-Lifecycle-Regel
+
+Ein gemergter Feature-Branch ist **abgeschlossen**.
+
+Nicht erlaubt:
+
+```text
+PR gemergt
+→ weitere Commits auf demselben Feature-Branch
+→ so tun, als gehörten sie noch zum alten Review
+```
+
+Stattdessen:
+
+```text
+PR gemergt
+→ main aktualisieren
+→ neuen Branch erstellen
+→ neue Iteration / neuer PR
+```
+
+Prüfung:
+
+```bash
+python3 Scripts/branch_lifecycle_guard.py
+```
+
+Der Guard ist read-only. Er meldet FAIL, wenn für den aktuellen Feature-Branch bereits ein gemergter PR existiert und danach neue Commits vor `origin/main` entstanden sind.
 
 ---
 
@@ -58,6 +89,18 @@ changes
 ---
 
 ## 4. LOKALE PRÜFUNGEN
+
+### Empfohlener Gesamteinstieg
+
+```bash
+python3 Scripts/p0_preflight.py
+```
+
+Auf der echten UE-5.8-Maschine:
+
+```bash
+python3 Scripts/p0_preflight.py --full
+```
 
 ### Pflicht vor jedem PR-Update
 
@@ -216,6 +259,7 @@ Eine Iteration ist erst fertig, wenn:
 - relevante Tests grün sind
 - kein Test abgeschwächt wurde, um GREEN zu erzeugen
 - Evidence korrekt klassifiziert ist
+- Arbeitsbranch nicht bereits zu einem abgeschlossenen PR gehört
 - generierte Dateien nicht versehentlich im Commit sind
 - `WICHTIG.md` für diese Iteration aktualisiert ist
 - genau ein neuer Qualitätsvorschlag in `CODEQUALITÄT.md` angehängt wurde

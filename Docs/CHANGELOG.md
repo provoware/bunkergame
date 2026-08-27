@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-08-27 — P0 Operator Experience / One-Command Preflight
+
+### Added
+- `Scripts/p0_preflight.py` als read-only Ein-Befehl-Vorprüfung vor dem realen UE-Lauf.
+- `--full`-Modus für die echte UE-5.8-Maschine inklusive Runner-Readiness.
+- zusätzliche Regressionstests für die Next-Best-Action-Entscheidungslogik.
+
+### Changed
+- P0-Ablauf führt jetzt statische Prüfung → Repository Quality → GitHub Branch Gate → optional UE-Readiness in fester Reihenfolge aus.
+- bei Fehlern wird der erste sinnvolle Blocker priorisiert statt mehrere Reparaturpfade gleichzeitig vorzuschlagen.
+- `Docs/GITHUB_P0_SETUP.md` auf den neuen Ein-Befehl-Ablauf synchronisiert.
+- Readiness-Dokumentation auf Schema v2, echte `Build.version`-Prüfung und 30-Minuten-Freshness-Gate aktualisiert.
+
+### Evidence state
+- Hosted `static-and-contract`: auf vorheriger P0-Härtungsiteration PASS.
+- Hosted `repository-quality`: auf vorheriger P0-Härtungsiteration PASS.
+- neuer P0-Preflight: implementiert; aktueller Head wird erneut über CI abgenommen.
+- Branch Protection: weiterhin externe Adminausführung erforderlich.
+- Self-hosted UE-5.8 Runner: weiterhin externe Maschinenarbeit erforderlich.
+- CP1 Runtime: weiterhin `UNOBSERVED/BLOCKED`.
+
+---
+
 ## 2026-08-27 — Dokumentations-/GitHub-Control-Plane Iteration 2
 
 ### Added
