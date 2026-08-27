@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-08-27 — P0 Admin Diagnostics
+
+### Added
+- `github_p0_admin.py --doctor` als read-only Administrations-Fähigkeitsprüfung.
+- explizite Prüfung von Repository-Adminrechten für `provoware/bunkergame`.
+- Fehlerklassifikation für GitHub 403, 404, 422 und unbekannte Fehler.
+- `Docs/GITHUB_ADMIN_DIAGNOSE.md` als Laienanleitung für Branch-Protection-Fehler.
+- zusätzliche Hosted-Regressionstests für Rechte-, Serverstatus- und Fehlerklassifikation.
+
+### Changed
+- Branch Protection wird nur noch nach bestätigtem Repository-Adminrecht angewendet.
+- `github_p0_status.py` liest zuerst `main.protected` über den normalen Branch-Endpunkt.
+- eine vollständige Protection-Detailprüfung erfolgt erst, wenn GitHub `protected=true` meldet.
+- Maintain-/Push-Rechte werden ausdrücklich nicht mit Repository-Administration verwechselt.
+
+### Evidence state
+- `main` meldete vor dieser Iteration serverseitig weiterhin `protected=false`.
+- neue Diagnose- und Regressionsebene implementiert; aktueller PR-Head wird über Hosted CI abgenommen.
+- reale Branch-Protection-Aktivierung weiterhin externe Adminaktion.
+- CP1 Runtime weiterhin `UNOBSERVED/BLOCKED`.
+
+---
+
 ## 2026-08-27 — P0 Operator Experience / One-Command Preflight
 
 ### Added
