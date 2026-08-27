@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Enforce per-iteration documentation learning rules on pull requests."""
+"""Enforce documentation learning rules on pull requests.
+
+The PR-level guard verifies that quality memory is append-only and that at
+least one new CQ entry exists relative to the base branch. The stricter
+process rule "exactly one CQ entry per development iteration" is intentionally
+not inferred from PR history because one PR may contain multiple valid
+iterations and several commits per iteration.
+"""
 
 from __future__ import annotations
 
@@ -50,10 +57,10 @@ def main() -> int:
         errors.append("pull request has no changed files")
 
     if WICHTIG not in changed:
-        errors.append("every iteration must update WICHTIG.md")
+        errors.append("pull request must update WICHTIG.md")
 
     if CODEQ not in changed:
-        errors.append("every iteration must append one entry to CODEQUALITÄT.md")
+        errors.append("pull request must append quality memory to CODEQUALITÄT.md")
 
     old_codeq = read_at_revision(base, CODEQ)
     new_path = ROOT / CODEQ
@@ -66,11 +73,11 @@ def main() -> int:
 
         old_entries = 0 if old_codeq is None else old_codeq.count("\n## CQ-")
         new_entries = new_codeq.count("\n## CQ-")
-        expected = old_entries + 1
-        if new_entries != expected:
+        added_entries = new_entries - old_entries
+        print(f"CQ entries: old={old_entries}, new={new_entries}, added={added_entries}")
+        if added_entries < 1:
             errors.append(
-                f"CODEQUALITÄT.md must add exactly one CQ entry per iteration: "
-                f"old={old_entries}, new={new_entries}, expected={expected}"
+                "CODEQUALITÄT.md must contain at least one new CQ entry relative to the PR base"
             )
 
     wichtig_path = ROOT / WICHTIG
