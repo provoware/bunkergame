@@ -742,3 +742,42 @@ Der Repository Quality Guard schützt Contract, Assistant, GUI und Regressionste
 **Wartbarkeit:** sehr hoch  
 **Gameplay-Risiko:** keines
 
+---
+
+## CQ-2026-08-27-013 — Dateirechte als testbaren Bestandteil des Portable-Release-Vertrags behandeln
+
+**Iteration:** Linux Click-&-Start Executable Mode  
+**Kategorie:** Portabilität / Release Integrity / Linux  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — Hosted-/Release-Abnahme noch offen  
+**Aufwand:** 2/10  
+**Risiko:** 1/10
+
+### Verbesserungsvorschlag
+
+Unix-Dateimodi dürfen bei portablen Startskripten nicht als nebensächliche Metadaten behandelt werden. Zentrale `.sh`-Einstiege werden als `100755` versioniert und der Package-Integrity-Test prüft die Execute-Bits automatisch.
+
+### Grund
+
+Der Release-Smoke nach dem Environment-Doctor-Fix zeigte, dass `START_BUNKER_BEATS_INTELLIGENT.sh` und `START_BUNKER_BEATS_ALL.sh` zwar per `bash datei.sh` funktionierten, aber nicht als echte Klick-&-Start-Dateien ausgeliefert wurden. Eine nachträgliche Paketkorrektur mit `chmod` würde außerdem den Release-Inhalt von der tatsächlichen `main`-Basis entkoppeln.
+
+### Wirkung
+
+- Git-Checkout und Release-ZIP erhalten dieselben ausführbaren Einstiegspunkte
+- kein manuelles `chmod +x` für Laien erforderlich
+- Start-/Smoke-/CP1-Shellpfade werden konsistent
+- Dateimodus-Regressionen brechen die bestehende CI frühzeitig
+- Paketierung bleibt reproduzierbar und muss keine Rechte erfinden
+
+### Technischer Effekt
+
+`Tests/test_cp1_package_integrity.py` prüft für `START_BUNKER_BEATS_INTELLIGENT.sh`, `START_BUNKER_BEATS_ALL.sh`, `RUN_CP1_UE58_ALL.sh` und `Build/Scripts/run_cp1_smoke.sh` Existenz und Unix-Execute-Bits. Die entsprechenden Git-Tree-Einträge werden auf `100755` gesetzt.
+
+### Erwarteter Nutzen
+
+**Portabilität:** sehr hoch  
+**Laienfreundlichkeit:** sehr hoch  
+**Release-Integrität:** sehr hoch  
+**Regressionserkennung:** hoch  
+**Gameplay-Risiko:** keines
+
