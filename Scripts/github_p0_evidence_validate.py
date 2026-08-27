@@ -45,8 +45,9 @@ def validate_record(data: object, *, now: datetime | None = None) -> tuple[bool,
     if not isinstance(data, dict):
         return False, ["evidence root is not an object"]
 
-    if data.get("schema_version") != SCHEMA_VERSION:
-        failures.append(f"unexpected schema_version: {data.get('schema_version')!r}")
+    schema_version = data.get("schema_version")
+    if type(schema_version) is not int or schema_version != SCHEMA_VERSION:
+        failures.append(f"unexpected schema_version: {schema_version!r}")
     if data.get("kind") != KIND:
         failures.append("wrong evidence kind")
     if data.get("live_observed") is not True:
@@ -66,7 +67,8 @@ def validate_record(data: object, *, now: datetime | None = None) -> tuple[bool,
     if not isinstance(main_sha, str) or not SHA_RE.fullmatch(main_sha):
         failures.append("main_sha is not a valid 40-character SHA")
     ruleset_id = data.get("ruleset_id")
-    if not isinstance(ruleset_id, int) or ruleset_id <= 0:
+    valid_ruleset_id = type(ruleset_id) is int and ruleset_id > 0
+    if not valid_ruleset_id:
         failures.append("ruleset_id is not a positive integer")
     if data.get("ruleset_name") != RULESET_NAME:
         failures.append("ruleset_name differs from P0 contract")
@@ -82,7 +84,7 @@ def validate_record(data: object, *, now: datetime | None = None) -> tuple[bool,
     sources = data.get("sources")
     expected_branch = f"{API_ROOT}/repos/{REPO}/branches/{BRANCH}"
     expected_rulesets = f"{API_ROOT}/repos/{REPO}/rulesets"
-    expected_detail = f"{API_ROOT}/repos/{REPO}/rulesets/{ruleset_id}" if isinstance(ruleset_id, int) else None
+    expected_detail = f"{API_ROOT}/repos/{REPO}/rulesets/{ruleset_id}" if valid_ruleset_id else None
     if not isinstance(sources, dict):
         failures.append("source endpoint map is missing")
     else:
@@ -145,6 +147,9 @@ def live_recheck(data: dict[str, Any], *, getter: Getter = github_get) -> tuple[
         return False, failures
 
     live_id = matches[0].get("id")
+    if type(live_id) is not int or live_id <= 0:
+        failures.append("live ruleset id is not a positive integer")
+        return False, failures
     if live_id != data.get("ruleset_id"):
         failures.append(f"ruleset id drift: evidence={data.get('ruleset_id')} live={live_id}")
         return False, failures
