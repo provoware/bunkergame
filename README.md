@@ -12,7 +12,9 @@ BUNKER BEATS wird als **beweisorientiertes Unreal-Engine-Projekt** entwickelt: E
 |---|:---:|---|---|
 | Repository-Struktur | 🟢 | aufgebaut | PR-Checks dauerhaft grün halten |
 | Headless Core | 🟢 | deterministisch validiert | Regressionen verhindern |
-| GitHub CI | 🟢 | `Validate` eingerichtet | auf jedem PR ausführen |
+| GitHub Validate | 🟢 | eingerichtet | `static-and-contract` stabil halten |
+| Quality Guard | 🟢 | eingerichtet | `repository-quality` stabil halten |
+| `main` Branch-Schutz | 🔴 | noch nicht aktiv | Ruleset + Required Checks |
 | UE-5.8-Build | 🟡 | vorbereitet | echter Build auf UE-5.8-Maschine |
 | Character Spawn | 🟡 | Test implementiert | Runtime-Evidence erzeugen |
 | Movement | 🟡 | Test implementiert | messbare Bewegung nachweisen |
@@ -27,27 +29,30 @@ BUNKER BEATS wird als **beweisorientiertes Unreal-Engine-Projekt** entwickelt: E
 
 ## ▶️ Schnellstart
 
-### Nur Projekt prüfen – ohne Unreal Engine
+### Projekt vollständig prüfen – ohne Unreal Engine
 
 Linux / macOS:
 
 ```bash
 python3 Scripts/ci_verify.py
+python3 Scripts/repo_quality.py
 ```
 
 Windows:
 
 ```bat
 python Scripts\ci_verify.py
+python Scripts\repo_quality.py
 ```
 
-**Erwartetes Ergebnis:**
+**Erwartete Ergebnisse:**
 
 ```text
 CI_VERIFY: PASS
+QUALITY_GUARD: PASS
 ```
 
-Damit werden Projektstruktur, Python-Code, JSON-Dateien, CP1-Vertrag und die Regel gegen erfundene Runtime-Erfolge geprüft.
+Damit werden neben den CP1-/Projektverträgen auch Dokumentlinks, JSON-Dateien, Python-Syntax, Repository-Hygiene, GitHub-Action-Pinning und die Verbesserungsdateien geprüft.
 
 ### CP1 wirklich ausführen – auf einer UE-5.8-Maschine
 
@@ -63,9 +68,11 @@ Windows:
 RUN_CP1_UE58_ALL.bat
 ```
 
-Der Runner führt automatisch aus:
+Der automatisierte GitHub-Runtime-Pfad führt aus:
 
 ```text
+Runner Readiness
+   ↓
 Vorprüfung
    ↓
 UE-5.8-Build
@@ -87,11 +94,27 @@ Die erzeugten Laufdaten liegen unter `Diagnostics/Runtime/` und werden **nicht**
 
 ---
 
-## 🎯 Aktueller P0 – genau ein Engpass
+## 🎯 Aktueller P0
 
-Der wichtigste nächste Schritt ist der **erste echte CP1-Lauf auf einer Maschine mit Unreal Engine 5.8**.
+### P0-A — GitHub-Integrationspfad absichern
 
-### CP1 wird nur GREEN, wenn alles bewiesen ist
+Der aktuelle organisatorische Bypass ist ein ungeschützter `main`-Branch.
+
+Required Checks nach dem ersten stabilen Quality-Guard-Lauf:
+
+```text
+static-and-contract
+repository-quality
+```
+
+Danach Force-Push und Branch-Löschen sperren und Pull Requests für `main` verpflichtend machen.
+
+➡️ Exakte Einrichtung: **[Docs/GITHUB_P0_SETUP.md](Docs/GITHUB_P0_SETUP.md)**  
+➡️ Aktuell wichtigster Verbesserungsvorschlag: **[WICHTIG.md](WICHTIG.md)**
+
+### P0-B — erster echter UE-5.8-CP1-Lauf
+
+CP1 wird nur GREEN, wenn alles bewiesen ist:
 
 - [ ] Projekt kompiliert mit UE 5.8.
 - [ ] Editor-/Test-Target startet korrekt.
@@ -110,18 +133,35 @@ Der wichtigste nächste Schritt ist der **erste echte CP1-Lauf auf einer Maschin
 
 ## 🤖 GitHub-Automation
 
-### `Validate`
+### `Validate` → Check `static-and-contract`
 
-Läuft auf Pull Requests und prüft den schnellen, engineunabhängigen Teil:
+Prüft den schnellen, engineunabhängigen Fachpfad:
 
-- Python-Syntax und Tests
+- Python-/Headless-Tests
 - JSON-/Config-Verträge
 - Repository-Struktur
 - CP1-Runtime-Vertrag
 - Failure-/Learning-Logik
 - Schutz gegen Fake-Evidence
 
-### `CP1 UE 5.8 Runtime`
+### `Quality Guard` → Check `repository-quality`
+
+Läuft auf Pull Requests, `main`, manuell und zusätzlich wöchentlich.
+
+Prüft autonom:
+
+- Pflichtdateien
+- JSON-Lesbarkeit
+- Python-Syntax
+- lokale Dokumentlinks
+- Merge-Konfliktmarker
+- verbotene generierte Pfade
+- vollständiges Commit-SHA-Pinning externer GitHub Actions
+- Struktur von `WICHTIG.md` und `CODEQUALITÄT.md`
+- PR-Regel: `CODEQUALITÄT.md` bleibt append-only
+- PR-Regel: Verbesserungsdateien werden je Iteration mitgeführt
+
+### `CP1 UE 5.8 Runtime` → Check `cp1-runtime`
 
 Ist für einen **Self-hosted Runner** mit echter Unreal-Engine-5.8-Installation vorgesehen.
 
@@ -139,6 +179,8 @@ Zusätzlich muss die Repository-Variable gesetzt sein:
 UE58_RUNNER_ENABLED=true
 ```
 
+Vor Unreal selbst läuft `Scripts/runner_readiness.py`. Ein Readiness-PASS beweist nur die Maschinenbereitschaft und niemals CP1.
+
 Der Runtime-Workflow wird absichtlich nicht auf fremdem Fork-Code automatisch ausgeführt.
 
 ### Weitere Hilfen
@@ -151,19 +193,35 @@ Der Runtime-Workflow wird absichtlich nicht auf fremdem Fork-Code automatisch au
 
 ---
 
+## 🔁 Eingebaute Verbesserungs-Schleife
+
+### `WICHTIG.md`
+
+Enthält **genau einen aktuell priorisierten** Vorschlag: Schwachstelle, Verbesserung, Optimierung, Erweiterung oder Risikoabbau.
+
+### `CODEQUALITÄT.md`
+
+Ist **append-only**. Pro Iteration kommt genau ein neuer Qualitätsvorschlag mit Grund, Wirkung und technischem Effekt hinzu. Alte Einträge bleiben als Entwicklungsgedächtnis erhalten.
+
+Der `Iteration Guard` kontrolliert diese Regeln automatisch auf normalen Pull Requests.
+
+---
+
 ## 🧱 Projektstruktur
 
 | Ordner / Datei | Zweck |
 |---|---|
 | `Source/` | Unreal-C++ und Runtime-/Smoke-Tests |
 | `Launcher/` | Diagnose, Reparatur, Lernlogik und Runtime-Orchestrierung |
-| `Scripts/` | CI, Gates, Runner, Reports und Hilfswerkzeuge |
+| `Scripts/` | CI, Gates, Runner, Quality Guards, Reports und Hilfswerkzeuge |
 | `Config/` | Policies, Manifeste und Toolchain-Vorgaben |
 | `Tests/` | Headless-, Contract-, Quality- und Regressionstests |
 | `Docs/` | technische Projekt- und Gameplay-Dokumentation |
 | `Diagnostics/` | lokale Laufdaten; bewusst nicht versioniert |
 | `AGENTS.md` | verbindliche Entwicklungsregeln |
 | `ANLEITUNG.md` | Laienanleitung von Start bis CP1 |
+| `WICHTIG.md` | aktueller Verbesserungsfokus |
+| `CODEQUALITÄT.md` | append-only Qualitätsjournal |
 | `Docs/TODO.md` | priorisierte Entwicklungssteuerung |
 
 ---
@@ -174,10 +232,13 @@ Der Runtime-Workflow wird absichtlich nicht auf fremdem Fork-Code automatisch au
 |---|---|
 | das Projekt verstehen | `README.md` |
 | das Projekt starten/testen | [ANLEITUNG.md](ANLEITUNG.md) |
+| den aktuell wichtigsten Verbesserungsfokus sehen | [WICHTIG.md](WICHTIG.md) |
+| Qualitätsideen und ihre Wirkung nachvollziehen | [CODEQUALITÄT.md](CODEQUALITÄT.md) |
 | wissen, was als Nächstes kommt | [Docs/TODO.md](Docs/TODO.md) |
+| den aktuellen technischen Status lesen | [Docs/PROJEKTSTATUS.md](Docs/PROJEKTSTATUS.md) |
+| GitHub-Schutz + UE-Runner einrichten | [Docs/GITHUB_P0_SETUP.md](Docs/GITHUB_P0_SETUP.md) |
 | Entwicklungsregeln verstehen | [AGENTS.md](AGENTS.md) |
 | tiefer in die Architektur gehen | [Docs/README.md](Docs/README.md) |
-| den aktuellen technischen Status lesen | [Docs/PROJEKTSTATUS.md](Docs/PROJEKTSTATUS.md) |
 | CP1 technisch nachvollziehen | [Docs/CP1_RUNTIME_EXECUTION.md](Docs/CP1_RUNTIME_EXECUTION.md) |
 | Gameplay und Spielidee lesen | [Docs/GAMEPLAY_GUIDE.md](Docs/GAMEPLAY_GUIDE.md) |
 
@@ -203,17 +264,23 @@ BUNKER BEATS unterscheidet strikt zwischen:
 ```text
 Problem / Ziel
    ↓
+WICHTIG + TODO prüfen
+   ↓
 kleinste sinnvolle Änderung
    ↓
-lokale Schnellprüfung
+ci_verify + repo_quality
    ↓
 passender Regressionstest
+   ↓
+WICHTIG aktualisieren
+   ↓
+CODEQUALITÄT anhängen
    ↓
 Commit auf Arbeitsbranch
    ↓
 Pull Request
    ↓
-GitHub Validate
+static-and-contract + repository-quality
    ↓
 bei Runtime-Themen: echter UE-5.8-Test
    ↓
@@ -226,7 +293,7 @@ Merge erst bei erfülltem Gate
 
 ## 📌 Aktueller Entwicklungsfokus
 
-**P0:** echten UE-5.8-CP1-Lauf ausführen und beweisen.
+**P0:** Repository-Gates verbindlich machen und danach den echten UE-5.8-CP1-Lauf ausführen und beweisen.
 
 **P1 danach:** erster spielbarer Vertikalschnitt:
 
@@ -245,11 +312,14 @@ Character
 ## 📚 Zentrale Dokumente
 
 - [Laienanleitung](ANLEITUNG.md)
+- [Aktueller Verbesserungsfokus](WICHTIG.md)
+- [Codequalitäts-Journal](CODEQUALITÄT.md)
 - [Master TODO](Docs/TODO.md)
 - [Repository-/Agentenregeln](AGENTS.md)
 - [Beitragen / GitHub-Workflow](CONTRIBUTING.md)
 - [Technische Projektdokumentation](Docs/README.md)
 - [Projektstatus](Docs/PROJEKTSTATUS.md)
+- [GitHub-P0-Setup](Docs/GITHUB_P0_SETUP.md)
 - [CP1 Runtime-Ausführung](Docs/CP1_RUNTIME_EXECUTION.md)
 - [CP1 Smoke Suite](Docs/CP1_SMOKE_SUITE.md)
 - [Gameplay Guide](Docs/GAMEPLAY_GUIDE.md)
@@ -265,7 +335,10 @@ Eine Änderung ist erst fertig, wenn:
 3. vorhandene Tests weiter bestehen,
 4. neue Risiken durch passende Tests abgedeckt sind,
 5. der Status nicht besser dargestellt wird als die Evidence erlaubt,
-6. README/TODO/Anleitung bei sichtbaren Änderungen aktualisiert wurden,
-7. der Pull Request den Nachweis nachvollziehbar enthält.
+6. `WICHTIG.md` aktualisiert wurde,
+7. genau ein neuer Eintrag in `CODEQUALITÄT.md` angehängt wurde,
+8. TODO/Projektstatus/Changelog bei relevanten Änderungen synchron sind,
+9. der Pull Request Risiko und Rollback nachvollziehbar enthält,
+10. die Required Checks passend zum Scope grün sind.
 
-**Aktuelle Wahrheit:** Die Infrastruktur für CP1 steht. Der echte UE-5.8-Runtime-Beweis ist der nächste entscheidende Schritt.
+**Aktuelle Wahrheit:** Die statische/automatische Control Plane steht. Branch-Schutz und der echte UE-5.8-Runtime-Beweis sind die nächsten entscheidenden P0-Schritte.
