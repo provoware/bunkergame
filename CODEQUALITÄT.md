@@ -298,3 +298,64 @@ Der Guard ist die erste Stufe von `Scripts/p0_preflight.py`. Die reine Entscheid
 **Fehlbedienungsschutz:** hoch  
 **CI-Evidence-Zuordnung:** hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-006 — GitHub-Adminfähigkeit vor jeder Schutzänderung beweisen
+
+**Iteration:** P0 Admin Diagnostics  
+**Kategorie:** GitHub-Administration / Fehlerdiagnose / Safety by Design  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — reale Serveranwendung weiterhin extern  
+**Aufwand:** 3/10  
+**Risiko:** 1/10
+
+### Verbesserungsvorschlag
+
+Vor einer Branch-Protection-Schreiboperation nicht nur `gh auth status`, sondern die **konkrete Administrationsfähigkeit für das Zielrepository** maschinell beweisen. Fehler der GitHub-API sollen außerdem in unterscheidbare, handlungsorientierte Kategorien übersetzt werden.
+
+### Grund
+
+Eine gültige GitHub-Anmeldung beweist nicht, dass das verwendete Konto bzw. Token `provoware/bunkergame` administrieren darf. Ein Nutzer kann korrekt angemeldet sein und trotzdem nur Push- oder Maintain-Rechte besitzen. Ohne vorgelagerte Fähigkeitsprüfung führt das zu unnötigen Apply-Versuchen und schwer verständlichen API-Fehlern.
+
+### Wirkung
+
+- kein Branch-Protection-Apply ohne bestätigtes Repository-Adminrecht
+- 403, 404 und 422 führen zu unterschiedlichen Reparaturpfaden
+- falscher Repository- oder Branch-Kontext wird früh erkannt
+- Serverstatus `protected=false` kann ohne Detail-API eindeutig erkannt werden
+- weniger Fehlversuche und weniger manuelle Interpretation von GitHub-Ausgaben
+
+### Technischer Effekt
+
+`github_p0_admin.py` besitzt jetzt `--doctor` und prüft read-only:
+
+```text
+gh installiert + angemeldet
+→ repos/provoware/bunkergame
+→ full_name korrekt
+→ nicht archiviert
+→ permissions.admin == true
+→ main vorhanden
+→ protected-Serverhinweis
+→ GITHUB_ADMIN_PREFLIGHT: PASS/BLOCKED
+```
+
+Die API-Fehlerklassifikation unterscheidet:
+
+- `AUTHORIZATION_403`
+- `RESOURCE_404`
+- `VALIDATION_422`
+- `UNKNOWN_GITHUB_ERROR`
+
+`github_p0_status.py` fragt zuerst den normalen Branch-Endpunkt ab. Bei `protected=false` ist der Branch-Gate-Fehler damit direkt bewiesen. Bei `protected=true` folgt erst die vollständige Detailprüfung der Schutzregeln und Required Checks.
+
+Die Logik ist durch zusätzliche Hosted-Regressionstests abgesichert.
+
+### Erwarteter Nutzen
+
+**Diagnosequalität:** sehr hoch  
+**Laienfreundlichkeit:** sehr hoch  
+**Fehlbedienungsschutz:** sehr hoch  
+**Admin-Sicherheit:** hoch  
+**Gameplay-Risiko:** keines
