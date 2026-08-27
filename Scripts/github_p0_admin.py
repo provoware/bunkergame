@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,7 @@ REQUIRED_CHECKS = ["static-and-contract", "repository-quality"]
 ROOT = Path(__file__).resolve().parents[1]
 READINESS_REPORT = ROOT / "Diagnostics" / "Runtime" / "runner_readiness.json"
 MAX_READINESS_AGE_SECONDS = 30 * 60
+HTTP_STATUS_RE = re.compile(r"(?:HTTP\s*)?(403|404|422)\b", re.IGNORECASE)
 
 
 def run(args: list[str], *, input_text: str | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -40,6 +42,129 @@ def require_gh() -> None:
     auth = run(["gh", "auth", "status"], check=False)
     if auth.returncode != 0:
         raise RuntimeError("GitHub CLI ist nicht angemeldet. Einmal `gh auth login` ausführen.")
+
+
+def parse_json_output(text: str, label: str) -> dict:
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{label}: ungültige GitHub-Antwort: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{label}: unerwarteter Antworttyp")
+    return data
+
+
+def repo_admin_capability(data: dict) -> tuple[bool, str]:
+    if data.get("full_name") != REPO:
+        return False, f"falsches Repository in GitHub-Antwort: {data.get('full_name')!r}"
+    if data.get("archived") is True:
+        return False, "Repository ist archiviert"
+    permissions = data.get("permissions")
+    if not isinstance(permissions, dict):
+        return False, "Repository-Rechte konnten nicht bestimmt werden"
+    if permissions.get("admin") is True:
+        return True, "Repository-Adminrecht bestätigt"
+    if permissions.get("maintain") is True:
+        return False, "nur Maintain-Recht erkannt; Branch-Administration benötigt Admin"
+    if permissions.get("push") is True:
+        return False, "Schreibrecht erkannt, aber kein Repository-Adminrecht"
+    return False, "kein Repository-Adminrecht erkannt"
+
+
+def classify_gh_error(stderr: str) -> tuple[str, str, str]:
+    text = (stderr or "").strip()
+    lower = text.lower()
+    match = HTTP_STATUS_RE.search(text)
+    status = match.group(1) if match else None
+
+    if status == "403" or "resource not accessible" in lower or "forbidden" in lower:
+        return (
+            "AUTHORIZATION_403",
+            "GitHub verweigert die Administrationsaktion.",
+            "Mit einem Repository-Admin-Konto anmelden. Bei Fine-grained Tokens muss Repository Administration auf Read and write stehen.",
+        )
+    if status == "404" or "not found" in lower:
+        return (
+            "RESOURCE_404",
+            "Repository, Branch oder Protection-Ressource wurde nicht gefunden bzw. ist für diesen Token nicht sichtbar.",
+            f"`gh repo view {REPO}` und `gh api repos/{REPO}/branches/{BRANCH}` prüfen; danach Anmeldung/Berechtigungen kontrollieren.",
+        )
+    if status == "422" or "validation failed" in lower:
+        return (
+            "VALIDATION_422",
+            "GitHub hat die Schutzkonfiguration als ungültig abgelehnt.",
+            "Fehlertext auf ungültige Required-Checks oder nicht unterstützte Protection-Felder prüfen; nichts erzwingen oder abschwächen.",
+        )
+    return (
+        "UNKNOWN_GITHUB_ERROR",
+        "GitHub-Aktion ist fehlgeschlagen.",
+        "Die unveränderte GitHub-Fehlermeldung prüfen und erst danach erneut anwenden.",
+    )
+
+
+def describe_failure(action: str, stderr: str) -> str:
+    code, meaning, next_step = classify_gh_error(stderr)
+    raw = (stderr or "").strip() or "keine zusätzliche GitHub-Fehlermeldung"
+    return (
+        f"{action} fehlgeschlagen.\n"
+        f"Diagnose: {code}\n"
+        f"Bedeutung: {meaning}\n"
+        f"Nächster Schritt: {next_step}\n"
+        f"GitHub-Meldung: {raw}"
+    )
+
+
+def admin_preflight() -> bool:
+    print("\n=== ADMIN-FÄHIGKEITS-PRÜFUNG ===")
+
+    repo_result = run(["gh", "api", f"repos/{REPO}"], check=False)
+    if repo_result.returncode != 0:
+        print("[BLOCKED] Repository-Metadaten nicht lesbar.")
+        print(describe_failure("Repository-Prüfung", repo_result.stderr))
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    try:
+        repo_data = parse_json_output(repo_result.stdout, "Repository-Prüfung")
+    except RuntimeError as exc:
+        print(f"[BLOCKED] {exc}")
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    admin_ok, detail = repo_admin_capability(repo_data)
+    print(f"[{'PASS' if admin_ok else 'BLOCKED'}] Konto/Rechte: {detail}")
+    print(f"[INFO] Sichtbarkeit: {repo_data.get('visibility', 'unbekannt')}")
+    print(f"[INFO] Default-Branch: {repo_data.get('default_branch', 'unbekannt')}")
+
+    branch_result = run(["gh", "api", f"repos/{REPO}/branches/{BRANCH}"], check=False)
+    if branch_result.returncode != 0:
+        print("[BLOCKED] Zielbranch nicht lesbar.")
+        print(describe_failure("Branch-Prüfung", branch_result.stderr))
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    try:
+        branch_data = parse_json_output(branch_result.stdout, "Branch-Prüfung")
+    except RuntimeError as exc:
+        print(f"[BLOCKED] {exc}")
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    if branch_data.get("name") != BRANCH:
+        print(f"[BLOCKED] Erwarteter Branch {BRANCH!r} wurde nicht bestätigt.")
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    protected = branch_data.get("protected") is True
+    print(f"[INFO] GitHub-Server meldet {BRANCH}.protected={'true' if protected else 'false'}")
+
+    if not admin_ok:
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    print("[PASS] Repository, Branch und Repository-Adminrecht bestätigt.")
+    print("GITHUB_ADMIN_PREFLIGHT: PASS")
+    return True
 
 
 def protection_payload() -> dict:
@@ -101,7 +226,7 @@ def apply_protection() -> None:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"Branch-Schutz konnte nicht gesetzt werden:\n{result.stderr.strip()}")
+        raise RuntimeError(describe_failure("Branch-Schutz setzen", result.stderr))
     print("[PASS] Branch-Schutz wurde von GitHub angenommen.")
 
 
@@ -111,8 +236,8 @@ def verify() -> bool:
         check=False,
     )
     if result.returncode != 0:
-        print("[FAIL] Branch-Schutz konnte nicht gelesen werden.")
-        print(result.stderr.strip())
+        print("[FAIL] Branch-Schutz konnte nach dem Schreiben nicht detailliert gelesen werden.")
+        print(describe_failure("Branch-Schutz nachprüfen", result.stderr))
         return False
 
     try:
@@ -219,13 +344,18 @@ def set_runner_variable() -> None:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"Repository-Variable konnte nicht gesetzt werden:\n{result.stderr.strip()}")
+        raise RuntimeError(describe_failure("Repository-Variable setzen", result.stderr))
     print("[PASS] UE58_RUNNER_ENABLED=true gesetzt.")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="Branch-Schutz wirklich setzen")
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="nur GitHub-/Admin-Fähigkeit diagnostizieren; niemals schreiben",
+    )
     parser.add_argument(
         "--enable-runner-variable",
         action="store_true",
@@ -238,7 +368,15 @@ def main() -> int:
         require_gh()
     except RuntimeError as exc:
         print(f"\n[BLOCKED] {exc}")
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
         return 3
+
+    if not admin_preflight():
+        return 3
+
+    if args.doctor:
+        print("\nDiagnose abgeschlossen. Keine Änderung durchgeführt.")
+        return 0
 
     if not args.apply:
         print("\nKeine Änderung durchgeführt. Zum Anwenden: python3 Scripts/github_p0_admin.py --apply")
