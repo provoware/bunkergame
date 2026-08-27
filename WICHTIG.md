@@ -2,103 +2,103 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-006 — Branch-Protection-Fehler selbst diagnostizieren statt nur abbrechen
+## W-2026-08-27-007 — GitHub-Schutz über unabhängig lesbares Ruleset beweisen
 
-**Kategorie:** GitHub-Administration / Diagnose / Laienführung  
+**Kategorie:** Evidence Integrity / GitHub Rulesets / Robustheit / Codequalität  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT — reale Admin-Ausführung weiterhin extern erforderlich  
+**Status:** 🟢 IMPLEMENTIERT — reales Ruleset auf GitHub noch anzuwenden  
 **Nutzen:** 10/10  
-**Aufwand:** 3/10  
-**Risiko der Umsetzung:** 1/10
+**Aufwand:** 4/10  
+**Risiko der Umsetzung:** 2/10
 
 ### Beobachtung
 
-GitHub meldete serverseitig weiterhin `main.protected=false`, obwohl der sichere Apply-Ablauf bereits vorbereitet war. Der bisherige Assistent prüfte vor dem Schreiben nur, ob `gh` installiert und angemeldet ist. Er prüfte noch nicht explizit, ob das angemeldete Konto für **genau `provoware/bunkergame`** tatsächlich Repository-Adminrechte besitzt.
-
-Bei Fehlern wurden 403, 404 und 422 außerdem nur als allgemeines Scheitern ausgegeben. Für Laien war damit nicht klar, ob Berechtigung, falscher Repository-/Branch-Kontext oder eine ungültige GitHub-Konfiguration die Ursache war.
+Die klassische Branch-Protection kann korrekt funktionieren, ihr Detail-Endpunkt ist für manche GitHub-Integrationen aber nicht lesbar. Dadurch entsteht ein ungünstiger Zustand: Der Schutz kann auf dem Admin-Rechner gesetzt werden, während eine unabhängige zweite Stelle die vollständige Konfiguration wegen eines 403 nicht nachprüfen kann.
 
 ### Verbesserungsvorschlag
 
-Vor jeder Adminänderung eine read-only Fähigkeitsprüfung ausführen:
+Den P0-Schutz bevorzugt als **Repository Ruleset** abbilden. Rulesets sind laut GitHub bereits mit Repository-Lesezugriff sichtbar. Dadurch kann der vollständige Serverzustand nach dem einmaligen Admin-Apply unabhängig nachgeprüft werden.
 
 ```text
-gh vorhanden
-→ gh angemeldet
-→ Repository exakt bestätigt
-→ Repository nicht archiviert
-→ permissions.admin == true
-→ main existiert
-→ aktuellen protected-Serverhinweis anzeigen
-→ erst dann Apply erlauben
-```
+Admin-Rechner
+→ --doctor
+→ --apply-ruleset
+→ GitHub speichert aktives Ruleset
 
-Fehler werden anschließend eindeutig klassifiziert:
-
-```text
-403 → Berechtigung / Token
-404 → Repository / Branch / Ressource
-422 → Konfiguration von GitHub abgelehnt
-sonst → unbekannter GitHub-Fehler
+Unabhängige Prüfung
+→ GET /repos/provoware/bunkergame/rulesets
+→ Ruleset-ID bestimmen
+→ vollständiges Ruleset lesen
+→ gemeinsamer Contract-Validator
+→ P0 PASS/FAIL
 ```
 
 ### Grund
 
-Eine erfolgreiche GitHub-Anmeldung beweist nur die Identität, nicht die Administrationsfähigkeit für das konkrete Zielrepository. Ohne diese Trennung kann ein korrekt angemeldetes Konto mit nur Push- oder Maintain-Rechten wiederholt in denselben Branch-Protection-Fehler laufen. Gleichzeitig muss ein API-Fehler eindeutig genug klassifiziert sein, damit nicht aus Unsicherheit Schutzregeln gelockert werden.
+Ein Beweis ist stärker, wenn seine Prüfung nicht dieselbe privilegierte Schnittstelle benötigt wie seine Erzeugung. Das Ruleset trennt daher **Schreiben mit Adminrecht** von **Lesen/Prüfen mit Read-Zugriff**. So wird die Infrastruktur-Evidence reproduzierbarer und weniger abhängig von einem einzelnen Token oder GitHub-App-Berechtigungsprofil.
 
 ### Umgesetzt
 
-- `github_p0_admin.py --doctor` ergänzt.
-- Repository-Adminrecht wird aus der authentifizierten Repository-Antwort geprüft.
-- Maintain-/Push-Rechte werden ausdrücklich nicht als Adminrecht akzeptiert.
-- falscher Repository-Kontext wird blockiert.
-- archiviertes Repository wird blockiert.
-- Zielbranch `main` wird vor dem Schreiben bestätigt.
-- aktueller Serverhinweis `main.protected=true/false` wird angezeigt.
-- 403/404/422 erhalten eigene Diagnosecodes und konkrete nächste Schritte.
-- Apply und Runner-Variable verwenden dieselbe Fehlerklassifizierung.
-- `github_p0_status.py` liest zuerst den normalen Branch-Endpunkt und meldet `protected=false` eindeutig ohne Detail-API.
-- erst bei `protected=true` wird die vollständige Branch-Protection-Konfiguration als Beweis geprüft.
-- neue Regressionstests decken Adminrecht, Maintain-only, falsches Repository, 403/404/422 und Protected-Hinweise ab.
+- `Scripts/github_p0_ruleset.py` als zentrale, reine Vertragslogik ergänzt.
+- ein einziger kanonischer Ruleset-Payload verhindert Drift zwischen Admin-, Status- und Testlogik.
+- Ruleset zielt ausschließlich auf `refs/heads/main`.
+- Enforcement muss exakt `active` sein; `evaluate` zählt niemals als realer Schutz.
+- Pull Request vor Integration ist verpflichtend.
+- Solo-Repository bleibt mit `required_approving_review_count=0` bedienbar.
+- offene Review-Diskussionen müssen gelöst sein.
+- `static-and-contract` und `repository-quality` sind Required Checks.
+- Branch muss vor Merge aktuell sein.
+- `deletion` blockiert das Löschen von `main`.
+- `non_fast_forward` blockiert Force-Push.
+- unerwartete Bypass-Akteure führen zu FAIL.
+- `cp1-runtime` bleibt bis zum stabilen echten UE-Runner bewusst nicht global required.
+- `github_p0_admin.py --apply-ruleset` arbeitet als sicheres Upsert: vorhandenes Soll-Ruleset aktualisieren, sonst neu anlegen; Duplikate blockieren.
+- nach jedem Write erfolgt serverseitiges Read-back mit demselben Contract-Validator.
+- `github_p0_status.py` prüft Rulesets zuerst und fällt nur bei Bedarf auf klassische Branch Protection zurück.
+- Hosted Regressionstests prüfen aktive/unechte Enforcement-Zustände, Required Checks, Strictness, Force-Push/Delete-Sperre, Bypass und Duplikate.
 
 ### Erwartete Wirkung
 
-- deutlich weniger Rätselraten bei GitHub-Adminfehlern
-- keine Apply-Versuche mit nur Maintain-/Push-Rechten
-- schneller Unterschied zwischen Rechteproblem und Payload-Problem
-- unabhängigerer Servernachweis über `protected`
-- bessere Laienführung ohne Abschwächung des Sicherheitsgates
+- unabhängigere und leichter reproduzierbare Infrastruktur-Evidence
+- weniger Abhängigkeit vom klassischen Protection-Detail-Endpunkt
+- kein Unterschied zwischen Soll-Payload und Prüfvertrag
+- weniger duplizierte GitHub-Regellogik
+- eindeutige Anti-Fake-Regeln für Testfixtures
+- bessere Wartbarkeit durch zentrales Contract-Modul
 
 ### Technischer Effekt
 
 ```text
-GITHUB_ADMIN_PREFLIGHT
-→ capability PASS/BLOCKED
-→ APPLY nur bei PASS
-→ serverseitiges Read-back
-→ GITHUB_P0_BRANCH_GATE PASS/FAIL
+P0 RULESET CONTRACT
+→ canonical payload
+→ safe upsert
+→ live server read-back
+→ same evaluator
+→ independent read-only verification
 ```
+
+Testdateien dürfen den Evaluator prüfen, aber nie einen Live-Server-PASS ersetzen. Ein echtes P0-Ruleset-PASS entsteht nur aus einer von GitHub gelesenen aktiven Ruleset-Konfiguration.
 
 ### Aktueller belegter Zustand
 
-- PR #1: gemergt
-- PR #3: gemergt
-- `main`: serverseitig zuletzt `protected=false`
-- verbundene GitHub-Identität: Repository-Rolle `admin=true` bestätigt
-- Admin-Diagnose: implementiert
-- neue Regressionstests: implementiert
-- reale Admin-Ausführung: extern offen
-- Self-hosted UE-5.8 Runner: extern offen
+- GitHub-Ruleset-Liste serverseitig aktuell leer (`[]`)
+- `main` serverseitig weiterhin ungeschützt
+- Repository-Rolle der verbundenen Identität: `admin=true`
+- Ruleset-Contract und Apply-/Verify-Pfad: implementiert
+- Anti-Fake-Regressionstests: implementiert
+- reales Ruleset: noch nicht angewendet
+- Self-hosted UE-5.8 Runner: weiterhin offen
 - CP1 Runtime: `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
 - Hosted `static-and-contract` PASS ist
 - Hosted `repository-quality` PASS ist
-- `python3 Scripts/github_p0_admin.py --doctor` auf dem Admin-Rechner `GITHUB_ADMIN_PREFLIGHT: PASS` meldet
-- `--apply` erfolgreich schreibt
-- `github_p0_status.py` anschließend `main.protected=true` und beide Required Checks bestätigt
-- `GITHUB_P0_BRANCH_GATE: PASS` serverseitig erreicht ist
+- `python3 Scripts/github_p0_admin.py --doctor` PASS meldet
+- `python3 Scripts/github_p0_admin.py --apply-ruleset` das aktive Ruleset serverseitig anlegt
+- der Ruleset-Endpunkt das vollständige Soll unabhängig lesbar zurückliefert
+- `github_p0_status.py` `GITHUB_P0_EVIDENCE_PATH: RULESET` und `GITHUB_P0_BRANCH_GATE: PASS` meldet
 
 ### Detailanleitung
 
-Siehe `Docs/GITHUB_ADMIN_DIAGNOSE.md`, `Docs/GITHUB_P0_SETUP.md` und Issue #2.
+Siehe `Docs/GITHUB_P0_SETUP.md`, `Docs/GITHUB_ADMIN_DIAGNOSE.md` und Issue #2.
