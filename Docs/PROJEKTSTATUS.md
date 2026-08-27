@@ -3,7 +3,7 @@
 **Stand:** 2026-08-27  
 **Phase:** Technical/Core Integration  
 **Aktueller Checkpoint:** CP1 Runtime  
-**Arbeitszweig:** `infra/p0-admin-diagnostics`
+**Arbeitszweig:** `infra/p0-evidence-bundle`
 
 > Dieses Dokument beantwortet nur: **Was ist aktuell bewiesen, was ist blockiert und was ist der nächste Engpass?**  
 > Bedienung: `ANLEITUNG.md` · Aufgaben: `Docs/TODO.md` · Regeln: `AGENTS.md` · aktueller Verbesserungsfokus: `WICHTIG.md`
@@ -15,25 +15,39 @@
 | Bereich | Status | Nachweis / Bedeutung |
 |---|---|---|
 | Headless Core | 🟢 BEWIESEN | 190 Kombinationen, 570 deterministische Checks |
-| Repository-Baseline | 🟢 BEWIESEN | Projektbasis auf `main`, Folgeänderungen über PR #4 |
+| Repository-Baseline | 🟢 BEWIESEN | vollständiger Projektbaum über PR-/CI-Pfad |
 | Static/Contract CI | 🟢 BEWIESEN | `static-and-contract` lief auf GitHub erfolgreich |
-| Repository Quality CI | 🟡 IN ABNAHME | neuester Ruleset-Head wird erneut über `repository-quality` geprüft |
-| P0 Ruleset Contract | 🟢 IMPLEMENTIERT | zentraler fail-closed Vertrag in `Scripts/github_p0_ruleset.py` |
-| Tokenfreier GitHub-Live-Verifier | 🟢 IMPLEMENTIERT | `github_p0_public_verify.py`; PASS nur aus echtem GitHub-Ruleset |
-| P0 Infrastructure Observer | 🟢 IMPLEMENTIERT | GitHub-hosted, täglich/manuell, ohne Admin-Secret |
-| Reales P0-Ruleset auf GitHub | 🔴 OFFEN | Serverliste meldete zuletzt `[]`; noch kein Infrastruktur-PASS |
-| Klassischer `main`-Schutz | 🔴 OFFEN/FALLBACK | `main.protected=false`; klassische Protection nur Fallback |
+| Repository Quality | 🟢 BEWIESEN | `repository-quality` inklusive P0-Regressionen erfolgreich |
+| P0 Ruleset Contract | 🟢 IMPLEMENTIERT | zentraler fail-closed Soll-/Ist-Vertrag |
+| Public Ruleset Verify | 🟢 IMPLEMENTIERT | tokenfreie Live-Abfrage ohne Adminrecht |
+| Infrastructure Evidence Bundle | 🟢 IMPLEMENTIERT | JSON + Freshness + SHA-256 + Live-Recheck |
+| P0 Infrastructure Observer | 🟢 IMPLEMENTIERT | GitHub-hosted, täglich/manuell, Artifact auch bei FAIL |
+| Reales P0-Ruleset auf GitHub | 🔴 OFFEN | letzte Live-Abfrage: Ruleset-Liste `[]` |
 | CP1 Telemetrie-Vertrag | 🟢 IMPLEMENTIERT | Frame-Time, Position, Velocity, Displacement, MovementComponent |
 | UE 5.8 Build | 🟡 UNBEOBACHTET | echte UE-5.8-Maschine erforderlich |
 | Character Spawn + Movement | 🟡 UNBEOBACHTET | echter Runtime-Lauf fehlt |
 | CP1 Gate | 🟡 BLOCKIERT | darf ohne Runtime-Evidence nicht GREEN werden |
-| Self-hosted UE-Runner | 🔴 OFFEN | realer Runner/Readiness/Variable noch nicht nachgewiesen |
+| Self-hosted UE-Runner | 🔴 OFFEN | Registrierung/Labels/Readiness noch nicht real bewiesen |
 
-**Evidence-Regel:** `IMPLEMENTIERT` ist nicht automatisch `BEWIESEN`. Testfixtures beweisen Validatorlogik, aber niemals den Live-GitHub-Zustand. Ein GitHub-Schutz-PASS entsteht nur aus einer live gelesenen aktiven Serverkonfiguration. Runtime-Verhalten wird ausschließlich durch maschinell erzeugte UE-5.8-Evidence zu PASS.
+**Evidence-Regel:** `IMPLEMENTIERT` ist nicht automatisch `BEWIESEN`. Ein Infrastruktur-PASS entsteht nur aus aktuellen GitHub-Live-Daten; Runtime-Verhalten ausschließlich aus echter UE-5.8-Evidence.
 
 ---
 
-## 2. WAS BEREITS FUNKTIONIERT
+## 2. AKTUELLER REPOSITORY-STAND
+
+PR #4 `infra: make GitHub P0 protection independently verifiable` ist gemergt.
+
+`main` danach:
+
+```text
+deba9c92f0ff7d36b1c62b420ef5c450b93157eb
+```
+
+Die laufende Folgeiteration `infra/p0-evidence-bundle` ergänzt keine Gameplay-Funktion, sondern verbessert ausschließlich Infrastruktur-Evidence, Drift-Erkennung, Diagnose und Codequalität.
+
+---
+
+## 3. WAS BEREITS FUNKTIONIERT
 
 - Headless-Regelwerk und deterministische Tests
 - 2-aus-20-Fähigkeitenmodell mit 190 Kombinationen
@@ -41,34 +55,90 @@
 - CP1 Game-/Editor-Targets und Primary Game Module
 - automatisierter CP1-Ablauf: Build → Spawn → Movement → Telemetrie → Gate
 - Schutz gegen stale/falsche Runtime-Evidence
-- GitHub `Validate` / Check `static-and-contract`
-- GitHub `Quality Guard` / Check `repository-quality`
+- GitHub `Validate` Workflow
+- `Quality Guard` mit Iteration Guard
 - optionaler `CP1 UE 5.8 Runtime` Workflow
-- zentraler GitHub-P0-Ruleset-Contract
-- Ruleset-Upsert mit Admin-Doctor und serverseitigem Read-back
+- zentraler GitHub-P0-Ruleset-Vertrag
+- sicherer Ruleset-Upsert über Admin-Assistent
 - tokenfreier öffentlicher Ruleset-Live-Verifier
-- GitHub-hosted `P0 Infrastructure Observer`
-- klassische Branch Protection als kompatibler Fallback
+- täglicher GitHub-hosted Infrastructure Observer
+- maschinenlesbares GitHub-P0-Evidence-Bundle
+- Live-Revalidator mit Bindung an aktuellen `main`-SHA und Ruleset-ID
 - CODEOWNERS, Dependabot, PR-/Issue-Templates
 - getrenntes Dokumentations-Cockpit
 
 ---
 
-## 3. WAS NOCH NICHT BEWIESEN IST
+## 4. INFRASTRUKTUR-EVIDENCE
 
-### Infrastruktur
+### Collector
 
-- aktives P0-Ruleset auf dem GitHub-Server
+```bash
+python3 Scripts/github_p0_evidence.py
+```
+
+Erzeugt:
+
+```text
+Diagnostics/Infrastructure/github_p0_evidence.json
+```
+
+Enthalten sind unter anderem:
+
+- Beobachtungszeit
+- Repository und Branch
+- aktueller Live-`main`-SHA
+- Ruleset-ID und Enforcement
+- P0-Contract-Status
+- Fehlerliste
+- abgefragte GitHub-Endpunkte
+- SHA-256-Integritätswert
+
+Der Hash erkennt lokale Veränderung, ist aber **keine GitHub-Signatur**.
+
+### Validator
+
+```bash
+python3 Scripts/github_p0_evidence_validate.py
+```
+
+Der Validator akzeptiert gespeicherte PASS-Evidence niemals allein. Er prüft:
+
+```text
+Schema
+→ Repository/Branch
+→ Freshness ≤ 36 h
+→ Integrität
+→ neue GitHub-Live-Abfrage
+→ main SHA identisch
+→ Ruleset-ID identisch
+→ P0-Contract erneut PASS
+```
+
+Nur danach:
+
+```text
+GITHUB_P0_EVIDENCE: PASS
+```
+
+Bei geändertem Live-Zustand:
+
+```text
+GITHUB_P0_EVIDENCE: DRIFT
+```
+
+Detailanleitung: `Docs/P0_INFRASTRUCTURE_EVIDENCE.md`.
+
+---
+
+## 5. WAS NOCH NICHT BEWIESEN IST
+
+- echtes aktives P0-Ruleset auf GitHub
 - `GITHUB_P0_PUBLIC_RULESET: PASS`
-- `GITHUB_P0_EVIDENCE_PATH: RULESET`
-- real registrierter und erreichbarer Self-hosted UE-5.8-Runner
-- frische echte `RUNNER_READINESS: PASS` Evidence
-- `UE58_RUNNER_ENABLED=true` nach Evidence-Gate
-
-### Runtime
-
+- `GITHUB_P0_EVIDENCE: PASS` aus realem Ruleset
+- Self-hosted UE-5.8-Runner online und korrekt gelabelt
 - UE-5.8-Kompilierung auf Zielmaschine
-- Unreal Editor Boot / Automation
+- Unreal Editor Boot / PIE
 - echter Character Spawn
 - echte 3D-Bewegung
 - Animation
@@ -78,37 +148,40 @@
 - Event-, Crowd- und Rival-Runtime
 - Packaged Build
 
-Diese Punkte bleiben **UNBEOBACHTET/BLOCKIERT**, bis der jeweilige reale Test oder Server-Lesepfad sie tatsächlich beobachtet hat.
+Diese Punkte bleiben **UNBEOBACHTET/BLOCKIERT**, bis ein passender realer Test sie tatsächlich ausgeführt hat.
 
 ---
 
-## 4. AKTUELLER P0-ENGPASS
+## 6. AKTUELLER P0-ENGPASS
 
-### P0-A — unabhängig beweisbares GitHub Ruleset
+### P0-A — reales GitHub-Ruleset
 
-Bevorzugter Sollzustand:
+Sollname:
 
-- Ruleset `BUNKER BEATS P0 main gate`
+```text
+BUNKER BEATS P0 main gate
+```
+
+Sollzustand:
+
 - `enforcement=active`
 - ausschließlich `refs/heads/main`
 - keine Bypass-Akteure
 - Pull Request erforderlich
-- offene Review-Diskussionen müssen gelöst sein
 - Required Check `static-and-contract`
 - Required Check `repository-quality`
 - Branch vor Merge aktuell
-- Force-Push gesperrt (`non_fast_forward`)
-- Löschen von `main` gesperrt (`deletion`)
+- Force-Push blockiert
+- Löschen von `main` blockiert
 - `cp1-runtime` noch nicht global required
 
-Der entscheidende Architekturpunkt: **Schreiben benötigt Adminrecht; der Beweis danach nicht.**
+Letzte Live-Evidence:
 
 ```text
-Admin-Apply
-→ GitHub Ruleset
-→ tokenfreier Public Verify
-→ GitHub-hosted Infrastructure Observer
+Repository-Rulesets: []
 ```
+
+Damit ist das Beweissystem vorhanden, aber der reale Schutz noch nicht aktiv.
 
 ### P0-B — Self-hosted UE-5.8-Runner
 
@@ -118,40 +191,38 @@ Benötigte Labels:
 - `unreal`
 - `ue-5.8`
 
-Danach frische Readiness-Evidence und erst dann:
+Danach Readiness-Evidence und erst dann:
 
 ```text
 UE58_RUNNER_ENABLED=true
 ```
 
-Erst anschließend kann CP1 nativ bewiesen werden.
+---
+
+## 7. AUTOMATISCHE QUALITÄT
+
+Die Repository-Prüfung ist mehrschichtig:
+
+1. **Validate** — CP1-/Contract-/Headless-Prüfungen.
+2. **Quality Guard** — Repository-Hygiene und Dokumentintegrität.
+3. **P0 Regression Tests** — Control Plane, Ruleset und Evidence-Logik.
+4. **Iteration Guard** — `WICHTIG.md` + append-only `CODEQUALITÄT.md`.
+5. **P0 Infrastructure Observer** — echter externer GitHub-Live-Zustand.
+
+Die Evidence-Regressionen prüfen zusätzlich:
+
+- fehlendes Ruleset
+- manipuliertes JSON
+- zu alte Evidence
+- falsches Repository
+- `main`-SHA-Drift
+- Ruleset-ID-Drift
+- Ruleset-Contract-Drift
+- Vorhandensein aller kritischen Evidence-Dateien
 
 ---
 
-## 5. AUTOMATISCHE QUALITÄT
-
-Die Prüfung ist mehrschichtig:
-
-1. **Validate / `static-and-contract`** — CP1-/Contract-/Headless-Prüfungen.
-2. **Quality Guard / `repository-quality`** — Repository-Hygiene, Dokumentintegrität, P0-Regressionstests und Iteration Guard.
-3. **P0 Infrastructure Observer** — echter öffentlicher GitHub-Ruleset-Zustand, GitHub-hosted und ohne Admin-Secret.
-4. **CP1 UE 5.8 Runtime** — späterer echter Runtime-Beweis auf Self-hosted UE-Maschine.
-
-Der Ruleset-Contract ist fail-closed. Unter anderem führen zu FAIL:
-
-- `enforcement=evaluate`
-- falscher/zusätzlicher Branchbereich
-- Bypass-Akteure
-- doppelte oder unerwartete Rule-Typen
-- fehlende/zusätzliche Required Checks
-- Strictness aus
-- fehlende PR-Regel
-- fehlende Delete-Sperre
-- fehlende Force-Push-Sperre
-
----
-
-## 6. DOKUMENTATIONS-ROLLEN
+## 8. DOKUMENTATIONS-ROLLEN
 
 | Datei | Aufgabe |
 |---|---|
@@ -159,34 +230,37 @@ Der Ruleset-Contract ist fail-closed. Unter anderem führen zu FAIL:
 | `ANLEITUNG.md` | Laien-Schrittfolge und Fehlerhilfe |
 | `Docs/PROJEKTSTATUS.md` | aktueller belegter Zustand |
 | `Docs/TODO.md` | priorisierte Arbeitssteuerung |
+| `Docs/GITHUB_P0_SETUP.md` | GitHub-Schutz und Runner-Setup |
+| `Docs/P0_INFRASTRUCTURE_EVIDENCE.md` | JSON-Evidence, Live-Recheck und Drift-Hilfe |
 | `AGENTS.md` | verbindliche Entwicklungs-/Agentenregeln |
 | `WICHTIG.md` | genau ein aktueller Verbesserungsfokus pro Iteration |
 | `CODEQUALITÄT.md` | append-only Qualitätsjournal mit Grund/Wirkung/Effekt |
 | `Docs/CHANGELOG.md` | tatsächlich umgesetzte Änderungen |
-| `Docs/GITHUB_P0_SETUP.md` | Ruleset-/Runner-Abnahme |
-| `Docs/GITHUB_ADMIN_DIAGNOSE.md` | Admin- und Infrastrukturdiagnose |
 
 ---
 
-## 7. NÄCHSTER VERTIKALSCHNITT NACH CP1
+## 9. NEXT BEST ACTION
+
+1. aktuelle Evidence-Bundle-Iteration über Hosted CI vollständig grün bekommen.
+2. Folge-PR integrieren.
+3. auf einem Admin-Rechner `python3 Scripts/github_p0_admin.py --doctor` ausführen.
+4. reales Ruleset mit `python3 Scripts/github_p0_admin.py --apply-ruleset` setzen.
+5. tokenfreien Live-PASS mit `github_p0_public_verify.py` beweisen.
+6. JSON-Evidence sammeln und mit `github_p0_evidence_validate.py` live revalidieren.
+7. Self-hosted UE-5.8-Runner registrieren.
+8. `RUNNER_READINESS: PASS` real erzeugen.
+9. Runner-Variable erst nach frischer Evidence freigeben.
+10. CP1 nativ ausführen und Runtime-Evidence prüfen.
+11. Erst nach echtem CP1-PASS den Interaction-Vertical-Slice beginnen.
+
+---
+
+## 10. NÄCHSTER VERTIKALSCHNITT NACH CP1
 
 Erst nach echtem CP1-PASS:
 
-`Character → Interaction → erster Task → Ability-Effekt → XP`
+```text
+Character → Interaction → erster Task → Ability-Effekt → XP
+```
 
 Crowd, Rival und größere Event-Runtime bleiben dahinter, solange sie keine direkte Abhängigkeit für diesen Slice sind.
-
----
-
-## 8. NEXT BEST ACTION
-
-1. aktuellen PR-Head über `static-and-contract` und `repository-quality` vollständig grün bekommen.
-2. auf einem Admin-Rechner `python3 Scripts/github_p0_admin.py --doctor` ausführen.
-3. `python3 Scripts/github_p0_admin.py --apply-ruleset` ausführen.
-4. unabhängig `python3 Scripts/github_p0_public_verify.py` → `GITHUB_P0_PUBLIC_RULESET: PASS` beweisen.
-5. `P0 Infrastructure Observer` manuell/automatisch als zweiten externen Live-Beweis prüfen.
-6. Self-hosted UE-5.8-Runner registrieren.
-7. `python3 Scripts/p0_preflight.py --full` auf der UE-Maschine ausführen.
-8. erst nach frischer Readiness `UE58_RUNNER_ENABLED=true` freigeben.
-9. CP1 nativ ausführen und Runtime-Evidence prüfen.
-10. erst danach CP1 GREEN und Interaction-Vertical-Slice beginnen.

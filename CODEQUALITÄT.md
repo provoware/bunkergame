@@ -416,3 +416,65 @@ Die Regressionstests lehnen insbesondere `enforcement=evaluate`, fehlende Requir
 **Codequalität:** sehr hoch  
 **Wartbarkeit:** sehr hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-008 — Gespeicherte Infrastruktur-Evidence immer an Live-Zustand rückbinden
+
+**Iteration:** P0 Infrastructure Evidence Bundle  
+**Kategorie:** Evidence Integrity / Drift Detection / Reproduzierbarkeit  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — echter Server-PASS weiterhin vom realen Ruleset abhängig  
+**Aufwand:** 4/10  
+**Risiko:** 2/10
+
+### Verbesserungsvorschlag
+
+Den tokenfreien Live-Check um ein versioniertes, maschinenlesbares Evidence-Bundle erweitern und **gespeicherte PASS-Evidence niemals allein akzeptieren**. Jeder spätere PASS muss zusätzlich durch eine neue Live-Abfrage gegen GitHub bestätigt werden.
+
+### Grund
+
+Eine reine Terminalausgabe ist für spätere Abnahmen schlecht archivfähig. Eine reine JSON-Datei ist dagegen zu leicht veraltet: `main` kann weitergezogen, das Ruleset geändert oder die Datei lokal verändert worden sein. Der robuste Weg kombiniert daher gespeicherten Kontext mit erneuter Gegenwartsprüfung.
+
+### Wirkung
+
+- jeder Infrastruktur-Lauf hinterlässt nachvollziehbare PASS- oder FAIL-Evidence
+- Evidence ist an den konkret beobachteten `main`-SHA gebunden
+- alter PASS wird nach neuem `main` automatisch ungültig
+- Ruleset-ID- und Contract-Drift werden erkannt
+- versehentliche lokale Änderungen werden über SHA-256 sichtbar
+- FAIL-Bundles bleiben als GitHub-Actions-Artefakt für Diagnose erhalten
+- kein gespeichertes Testfixture kann ohne erneute Live-Prüfung einen Produktions-PASS liefern
+
+### Technischer Effekt
+
+`Scripts/github_p0_evidence.py` erzeugt:
+
+```text
+schema_version
+kind
+observed_at_utc
+repository + branch
+main_sha
+ruleset_id + enforcement
+contract_status
+status
+failures
+source endpoints
+integrity_sha256
+```
+
+`Scripts/github_p0_evidence_validate.py` prüft zuerst Struktur, Freshness und Integrität und liest danach GitHub **erneut live**. Nur wenn `main`-SHA, Ruleset-ID und vollständiger P0-Contract weiterhin übereinstimmen, entsteht `GITHUB_P0_EVIDENCE: PASS`.
+
+Der SHA-256-Wert ist bewusst keine Server-Signatur. Er schützt nur die lokale Integrität; die Authentizität wird durch die erneute öffentliche GitHub-Abfrage hergestellt.
+
+Der `P0 Infrastructure Observer` lädt das Bundle mit gepinntem `actions/upload-artifact` auch bei FAIL hoch und setzt den Workflow erst danach auf Fehler. Die neue Testdatei `Scripts/tests/test_p0_evidence_bundle.py` deckt Manipulation, Stale-Evidence, falsches Repository, `main`-Drift und Ruleset-Drift separat ab.
+
+### Erwarteter Nutzen
+
+**Evidence-Integrität:** sehr hoch  
+**Drift-Erkennung:** sehr hoch  
+**Diagnosefähigkeit:** sehr hoch  
+**Reproduzierbarkeit:** sehr hoch  
+**Codequalität:** hoch  
+**Gameplay-Risiko:** keines
