@@ -2,91 +2,88 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-004 — P0-Vorprüfung auf einen eindeutigen Ein-Befehl-Ablauf reduzieren
+## W-2026-08-27-005 — Nach Merge nie still auf demselben Feature-Branch weiterentwickeln
 
-**Kategorie:** Bedienung / Fehlerprävention / P0 Control Plane  
+**Kategorie:** Git-Workflow / Prozessintegrität / Fehlerprävention  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT — externe Admin-/UE-Ausführung weiterhin erforderlich  
+**Status:** 🟢 IMPLEMENTIERT — als read-only Guard + Regressionstest  
 **Nutzen:** 9/10  
-**Aufwand:** 3/10  
+**Aufwand:** 2/10  
 **Risiko der Umsetzung:** 1/10
 
 ### Beobachtung
 
-Vor dem ersten realen CP1-Lauf existieren mehrere korrekte Einzelprüfungen (`ci_verify.py`, `repo_quality.py`, `github_p0_status.py`, `runner_readiness.py`). Für Einsteiger bleibt jedoch die Gefahr, Prüfungen in falscher Reihenfolge auszuführen, einen späteren Fehler vor einem früheren Engpass zu untersuchen oder nach einem FAIL nicht zu wissen, welcher konkrete Schritt als Nächstes sinnvoll ist.
+PR #1 wurde bereits gemergt, während danach noch weitere Änderungen auf demselben Feature-Branch entstanden. Diese Commits gehörten dadurch nicht mehr zum bereits abgeschlossenen PR und erhielten zunächst keinen neuen PR-/CI-Lifecycle.
+
+Das ist kein Codefehler, aber eine relevante Prozessschwachstelle: Ein bereits gemergter Branch kann optisch wie ein weiterhin aktiver Arbeitszweig wirken, obwohl die neue Arbeit außerhalb des abgeschlossenen Review-Gates liegt.
 
 ### Verbesserungsvorschlag
 
-Einen vollständig read-only arbeitenden Orchestrator bereitstellen:
+Ein read-only Branch-Lifecycle-Gate vor die technische P0-Prüfung setzen:
 
 ```text
-python3 Scripts/p0_preflight.py
+Arbeitsbranch bestimmen
+→ GitHub nach bereits gemergten PRs dieses Branches fragen
+→ Commits vor origin/main bestimmen
+→ wenn bereits gemergt + neue Commits vorhanden:
+   FAIL
+   → neuen Branch vom aktuellen main verlangen
 ```
-
-und auf der echten UE-5.8-Maschine:
-
-```text
-python3 Scripts/p0_preflight.py --full
-```
-
-Der Orchestrator führt die vorhandenen Gates in kontrollierter Reihenfolge aus, erzeugt eine kompakte Statusmatrix und nennt genau den ersten sinnvollen nächsten Schritt.
 
 ### Umgesetzt
 
-- `Scripts/p0_preflight.py` ist read-only.
-- statische Projektprüfung wird zuerst ausgeführt.
-- Repository Quality Guard folgt als zweite Schicht.
-- GitHub Branch-Gate wird danach geprüft.
-- `--full` ergänzt die lokale UE-5.8-Readiness.
-- kein PASS wird als CP1-Runtime-PASS interpretiert.
-- bei Fehlern wird der erste echte Engpass priorisiert.
-- Aktivierung der Runner-Variable wird nur empfohlen, wenn alle vorherigen Gates einschließlich Readiness PASS sind.
-- die Entscheidungslogik ist in `Scripts/tests/test_p0_control_plane.py` regressionsgetestet.
+- `Scripts/branch_lifecycle_guard.py` ergänzt.
+- das Skript verändert weder Git noch GitHub.
+- `main` wird nicht als Feature-Branch-Reuse gewertet.
+- bereits gemergter Feature-Branch mit neuen Commits wird blockiert.
+- noch nie gemergter oder aktuell offener Arbeitsbranch bleibt zulässig.
+- fehlende GitHub-CLI-/Auth-Daten erzeugen `BLOCKED`, keinen erfundenen PASS.
+- der Guard wurde als **erste Stufe** in `Scripts/p0_preflight.py` aufgenommen.
+- Regressionstests decken main, merged+ahead, merged+0, nie gemergt und ungültige PR-Antwort ab.
 
 ### Grund
 
-Mehrere gute Prüfskripte ergeben noch keinen guten Bedienprozess. Ein laienfreundlicher P0-Pfad braucht eine eindeutige Reihenfolge und eine einzelne Entscheidungsausgabe. Dadurch sinkt die Wahrscheinlichkeit von Shotgun-Debugging und Fehlbedienung.
+Ein Review-/CI-Prozess ist nur belastbar, wenn neue Arbeit nach einem Merge wieder einen neuen nachvollziehbaren Branch-/PR-Zyklus erhält. Sonst können Folgeänderungen versehentlich außerhalb des erwarteten Gate-Lebenszyklus landen.
 
 ### Erwartete Wirkung
 
-- weniger manuelle Reihenfolgefehler
-- schnelleres Erkennen des wirklichen Engpasses
-- weniger unnötige Parallelreparaturen
-- klare Trennung zwischen Hosted-Vorprüfung und echter UE-Maschine
-- bessere Übergabe an andere Entwickler oder Agenten
+- keine stillen Nacharbeiten auf bereits abgeschlossenen Feature-Branches
+- sauberere PR-Historie
+- jede Iteration erhält wieder einen eigenen prüfbaren Lifecycle
+- weniger Verwechslung zwischen gemergtem Stand und neuer Arbeit
+- bessere Grundlage für Branch Protection und Required Checks
 
 ### Technischer Effekt
 
+Der P0-Preflight beginnt jetzt mit:
+
 ```text
-P0_PREFLIGHT
+BRANCH_LIFECYCLE
 → static
 → quality
 → GitHub branch gate
 → optional UE58 readiness
-→ first failing gate
-→ next best action
 ```
 
-`P0_PREFLIGHT: PASS` bedeutet ausdrücklich nur, dass die Vorbedingungen erfüllt sind. Ein CP1-Runtime-PASS entsteht weiterhin ausschließlich durch den echten UE-5.8-Runtime-Workflow.
+Ein Branch-Lifecycle-FAIL hat bewusst Vorrang vor allen nachfolgenden technischen Prüfungen.
 
 ### Aktueller belegter Zustand
 
-- Hosted `Validate`: PASS auf der vorherigen abgenommenen Iteration
-- Hosted `Quality Guard`: PASS auf der vorherigen abgenommenen Iteration
-- P0-Preflight-Orchestrator: implementiert
-- zugehörige Entscheidungs-Regressionstests: implementiert
-- Branch-Protection auf `main`: extern offen
-- Self-hosted UE-5.8 Runner: extern offen
-- reale Readiness-Evidence: noch nicht vorhanden
-- CP1 Runtime: `UNOBSERVED/BLOCKED`
+- PR #1: gemergt
+- Folgebranch: `infra/p0-postmerge-hardening`
+- Branch-Lifecycle-Guard: implementiert
+- Regressionstests: implementiert
+- Branch Protection `main`: weiterhin extern offen
+- Self-hosted UE-5.8 Runner: weiterhin extern offen
+- CP1 Runtime: weiterhin `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
-- neuer Head über `static-and-contract` und `repository-quality` PASS ist
-- `python3 Scripts/p0_preflight.py` auf dem Admin-Rechner den korrekten GitHub-Engpass meldet
-- nach Branch-Schutz der gleiche Befehl zum UE-Schritt weiterleitet
-- `python3 Scripts/p0_preflight.py --full` auf der UE-Maschine nur bei echter Readiness PASS wird
-- anschließend der reale CP1-Lauf gestartet wird
+- Folge-PR gegen `main` offen ist
+- `static-and-contract` PASS ist
+- `repository-quality` PASS ist
+- Iteration Guard den neuen W-/CQ-Eintrag akzeptiert
+- die Nacharbeiten ausschließlich über den neuen Folge-PR integriert werden
 
 ### Detailanleitung
 
