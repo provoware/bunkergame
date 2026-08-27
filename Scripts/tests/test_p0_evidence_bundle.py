@@ -38,7 +38,7 @@ class InfrastructureEvidenceBundleTests(unittest.TestCase):
         missing_ruleset: bool = False,
     ):
         sha = main_sha or self.MAIN_SHA
-        rid = ruleset_id or self.RULESET_ID
+        rid = ruleset_id if ruleset_id is not None else self.RULESET_ID
         ruleset_detail = detail or self.make_detail()
 
         def fake_get(path: str):
@@ -84,12 +84,34 @@ class InfrastructureEvidenceBundleTests(unittest.TestCase):
         self.assertTrue(any("found 0" in item for item in data["failures"]))
         self.assertEqual(data["integrity_sha256"], evidence.compute_integrity(data))
 
+    def test_collector_rejects_boolean_ruleset_id(self):
+        data = evidence.collect_evidence(getter=self.make_getter(ruleset_id=True))
+        self.assertEqual(data["status"], "FAIL")
+        self.assertIsNone(data["ruleset_id"])
+        self.assertTrue(any("positive integer id" in item for item in data["failures"]))
+
     def test_fresh_sealed_pass_record_is_structurally_valid(self):
         now = datetime(2026, 8, 27, 14, 0, tzinfo=timezone.utc)
         data = self.make_pass_evidence(now=now)
         ok, failures = validator.validate_record(data, now=now + timedelta(minutes=5))
         self.assertTrue(ok, failures)
         self.assertEqual(failures, [])
+
+    def test_boolean_schema_version_is_blocked_even_after_resealing(self):
+        data = self.make_pass_evidence()
+        data["schema_version"] = True
+        data = evidence.seal_evidence(data)
+        ok, failures = validator.validate_record(data)
+        self.assertFalse(ok)
+        self.assertTrue(any("schema_version" in item for item in failures))
+
+    def test_boolean_ruleset_id_is_blocked_even_after_resealing(self):
+        data = self.make_pass_evidence()
+        data["ruleset_id"] = True
+        data = evidence.seal_evidence(data)
+        ok, failures = validator.validate_record(data)
+        self.assertFalse(ok)
+        self.assertTrue(any("ruleset_id is not a positive integer" in item for item in failures))
 
     def test_tampered_bundle_is_blocked_by_integrity_digest(self):
         data = self.make_pass_evidence()
