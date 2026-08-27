@@ -193,3 +193,60 @@ Der `Quality Guard` führt diese Tests automatisch aus.
 **Regressionserkennung:** sehr hoch  
 **Self-hosted-Runner-Sicherheit:** hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-004 — Ein-Befehl-P0-Preflight mit Next-Best-Action
+
+**Iteration:** P0 Operator Experience  
+**Kategorie:** Bedienbarkeit / Diagnose / Fehlerprävention  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — reale Admin-/UE-Ausführung noch offen  
+**Aufwand:** 3/10  
+**Risiko:** 1/10
+
+### Verbesserungsvorschlag
+
+Mehrere korrekte Einzelprüfungen zu einem read-only Orchestrator zusammenführen, der sie in einer festen Reihenfolge ausführt und bei Fehlern exakt den ersten sinnvollen nächsten Schritt nennt.
+
+### Grund
+
+Bei mehreren Gates kann ein Nutzer zwar jede Prüfung einzeln starten, aber dennoch am falschen Ende debuggen. Beispielsweise ist eine UE-Readiness-Reparatur nutzlos, wenn zuvor bereits der statische Projektvertrag gebrochen ist. Die Control Plane soll deshalb nicht nur prüfen, sondern auch die Reihenfolge der Problemlösung führen.
+
+### Wirkung
+
+- ein einziger Einstiegspunkt vor dem ersten Runtime-Lauf
+- weniger Reihenfolgefehler
+- weniger Shotgun-Debugging
+- klare Unterscheidung zwischen Admin-Rechner und UE-Maschine
+- sofort sichtbare Next-Best-Action
+- bessere Übergabe an Laien, neue Entwickler und autonome Agenten
+
+### Technischer Effekt
+
+Neu ist `Scripts/p0_preflight.py`:
+
+```text
+python3 Scripts/p0_preflight.py
+→ ci_verify
+→ repo_quality
+→ GitHub P0 status
+→ Next Best Action
+
+python3 Scripts/p0_preflight.py --full
+→ alle obigen Prüfungen
+→ UE58 runner_readiness
+→ Next Best Action
+```
+
+Der Orchestrator verändert keine GitHub-Einstellung. `P0_PREFLIGHT: PASS` ist ausdrücklich kein CP1-Runtime-PASS.
+
+Die Entscheidungslogik ist in `Scripts/tests/test_p0_control_plane.py` abgesichert: statischer Fehler hat Vorrang vor Quality, Quality vor GitHub, GitHub vor UE-Readiness; eine Runner-Freigabe wird nur nach vollständigem PASS empfohlen.
+
+### Erwarteter Nutzen
+
+**Laienfreundlichkeit:** sehr hoch  
+**Diagnosegeschwindigkeit:** hoch  
+**Fehlbedienungsschutz:** hoch  
+**Wartbarkeit:** hoch  
+**Gameplay-Risiko:** keines
