@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / "Launcher" / "core"
@@ -123,6 +122,16 @@ class EnvironmentAssistantContractTests(unittest.TestCase):
             self.summary = summary
             return Path("Diagnostics/Launcher/fake.json")
 
+    class FakeRepairAction:
+        def __init__(self):
+            self.repair_id = "REPAIR-UE-001"
+            self.title = "Unreal Engine 5.8 bereitstellen"
+            self.status = "BLOCKED"
+            self.safe = False
+            self.automatic = False
+            self.explanation = "Manuelle Installation erforderlich."
+            self.changed_paths = []
+
     class FakeEngine:
         def __init__(self):
             self.scan_count = 0
@@ -140,24 +149,7 @@ class EnvironmentAssistantContractTests(unittest.TestCase):
             ]
 
         def safe_repair(self, finding):
-            return SimpleNamespace(
-                repair_id="REPAIR-UE-001",
-                title="Unreal Engine 5.8 bereitstellen",
-                status="BLOCKED",
-                safe=False,
-                automatic=False,
-                explanation="Manuelle Installation erforderlich.",
-                changed_paths=[],
-                __dict__={
-                    "repair_id": "REPAIR-UE-001",
-                    "title": "Unreal Engine 5.8 bereitstellen",
-                    "status": "BLOCKED",
-                    "safe": False,
-                    "automatic": False,
-                    "explanation": "Manuelle Installation erforderlich.",
-                    "changed_paths": [],
-                },
-            )
+            return EnvironmentAssistantContractTests.FakeRepairAction()
 
     def setUp(self):
         self.old_record = assistant.regression_knowledge.record
@@ -182,6 +174,19 @@ class EnvironmentAssistantContractTests(unittest.TestCase):
         self.assertEqual(len(summary["after"]), 2)
         self.assertEqual(summary["after"][1]["message"], "Unreal fehlt weiterhin.")
         self.assertEqual(summary["overall"], "YELLOW")
+        self.assertEqual(instance.engine.scan_count, 2)
+
+    def test_repair_run_records_actions_and_revalidates(self):
+        instance = assistant.EnvironmentAssistant.__new__(assistant.EnvironmentAssistant)
+        instance.logger = self.FakeLogger()
+        instance.engine = self.FakeEngine()
+
+        result = instance.run(repair=True)
+        summary = result["summary"]
+
+        self.assertTrue(summary["repair_requested"])
+        self.assertEqual(len(summary["repairs"]), 1)
+        self.assertEqual(summary["repairs"][0]["status"], "BLOCKED")
         self.assertEqual(instance.engine.scan_count, 2)
 
 
