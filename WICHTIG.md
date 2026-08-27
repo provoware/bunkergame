@@ -2,99 +2,91 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-003 — Runner-Freigabe nur mit frischer, exakt verifizierter UE-5.8-Evidence
+## W-2026-08-27-004 — P0-Vorprüfung auf einen eindeutigen Ein-Befehl-Ablauf reduzieren
 
-**Kategorie:** Schwachstelle / Evidence / Self-hosted Runner / GitHub-Sicherheit  
+**Kategorie:** Bedienung / Fehlerprävention / P0 Control Plane  
 **Priorität:** P0  
-**Status:** 🟢 TECHNISCH GEHÄRTET — reale UE-Maschine weiterhin extern erforderlich  
-**Nutzen:** 10/10  
-**Aufwand:** 4/10  
-**Risiko der Umsetzung:** 2/10
+**Status:** 🟢 IMPLEMENTIERT — externe Admin-/UE-Ausführung weiterhin erforderlich  
+**Nutzen:** 9/10  
+**Aufwand:** 3/10  
+**Risiko der Umsetzung:** 1/10
 
 ### Beobachtung
 
-Der bisherige GitHub-P0-Assistent konnte `UE58_RUNNER_ENABLED=true` über einen expliziten Schalter setzen, obwohl nur ein Warnhinweis verlangte, vorher `RUNNER_READINESS: PASS` zu erzeugen. Außerdem erkannte `runner_readiness.py` zwar typische `UE_5.8`-Pfade, prüfte aber die tatsächliche Engine-Version aus `Engine/Build/Build.version` noch nicht und erzeugte keinen Freshness-Zeitstempel.
-
-Damit bestand ein möglicher Bypass zwischen **Maschine sieht passend aus** und **Maschine ist frisch und exakt als UE 5.8 geprüft**.
+Vor dem ersten realen CP1-Lauf existieren mehrere korrekte Einzelprüfungen (`ci_verify.py`, `repo_quality.py`, `github_p0_status.py`, `runner_readiness.py`). Für Einsteiger bleibt jedoch die Gefahr, Prüfungen in falscher Reihenfolge auszuführen, einen späteren Fehler vor einem früheren Engpass zu untersuchen oder nach einem FAIL nicht zu wissen, welcher konkrete Schritt als Nächstes sinnvoll ist.
 
 ### Verbesserungsvorschlag
 
-Die Aktivierung der Repository-Variable wird an maschinell validierte Evidence gebunden:
+Einen vollständig read-only arbeitenden Orchestrator bereitstellen:
 
 ```text
-runner_readiness.py
-→ Build.version lesen
-→ exakt UE 5.8 bestätigen
-→ alle Readiness-Checks PASS
-→ UTC-Zeitstempel schreiben
-→ Evidence höchstens 30 Minuten alt
-→ github_p0_admin.py validiert Evidence erneut
-→ erst dann UE58_RUNNER_ENABLED=true
+python3 Scripts/p0_preflight.py
 ```
+
+und auf der echten UE-5.8-Maschine:
+
+```text
+python3 Scripts/p0_preflight.py --full
+```
+
+Der Orchestrator führt die vorhandenen Gates in kontrollierter Reihenfolge aus, erzeugt eine kompakte Statusmatrix und nennt genau den ersten sinnvollen nächsten Schritt.
 
 ### Umgesetzt
 
-- `runner_readiness.json` verwendet Schema v2.
-- `generated_at_utc` wird gespeichert.
-- `Engine/Build/Build.version` wird gelesen.
-- `MajorVersion == 5` und `MinorVersion == 8` sind zwingend.
-- `engine_version_exact_5_8` ist ein Required Readiness Check.
-- `github_p0_admin.py` akzeptiert nur Schema v2 und den korrekten Evidence-Typ.
-- Status muss `PASS` sein.
-- alle Readiness-Checks müssen `true` sein.
-- Runtime-/CP1-Claims innerhalb der Readiness-Evidence werden als unzulässig blockiert.
-- Evidence älter als 30 Minuten wird blockiert.
-- deutlich in der Zukunft liegende Evidence wird blockiert.
-- Regressionstests liegen unter `Scripts/tests/test_p0_control_plane.py`.
-- `Quality Guard` führt diese Tests automatisch aus.
+- `Scripts/p0_preflight.py` ist read-only.
+- statische Projektprüfung wird zuerst ausgeführt.
+- Repository Quality Guard folgt als zweite Schicht.
+- GitHub Branch-Gate wird danach geprüft.
+- `--full` ergänzt die lokale UE-5.8-Readiness.
+- kein PASS wird als CP1-Runtime-PASS interpretiert.
+- bei Fehlern wird der erste echte Engpass priorisiert.
+- Aktivierung der Runner-Variable wird nur empfohlen, wenn alle vorherigen Gates einschließlich Readiness PASS sind.
+- die Entscheidungslogik ist in `Scripts/tests/test_p0_control_plane.py` regressionsgetestet.
 
 ### Grund
 
-Eine sicherheitsrelevante Freigabe darf nicht auf Erinnerung oder Bedienhinweis vertrauen. Der Übergang selbst muss die Evidence prüfen. Besonders bei Self-hosted Runnern kann veraltete oder falsch zugeordnete Readiness sonst einen Workflow auf einer inzwischen veränderten Maschine freischalten.
+Mehrere gute Prüfskripte ergeben noch keinen guten Bedienprozess. Ein laienfreundlicher P0-Pfad braucht eine eindeutige Reihenfolge und eine einzelne Entscheidungsausgabe. Dadurch sinkt die Wahrscheinlichkeit von Shotgun-Debugging und Fehlbedienung.
 
 ### Erwartete Wirkung
 
-- kein versehentliches Aktivieren ohne aktuelle Readiness
-- keine Freigabe für UE 5.7, UE 5.9 oder nur passend benannte Verzeichnisse
-- weniger Stale-Evidence-Risiko
-- klarere Trennung von Maschinenbereitschaft und Runtime-Erfolg
-- Regressionen der Freigabelogik werden in Hosted CI erkannt
+- weniger manuelle Reihenfolgefehler
+- schnelleres Erkennen des wirklichen Engpasses
+- weniger unnötige Parallelreparaturen
+- klare Trennung zwischen Hosted-Vorprüfung und echter UE-Maschine
+- bessere Übergabe an andere Entwickler oder Agenten
 
 ### Technischer Effekt
 
-Die Freigabe wird zu einer echten Evidence-State-Machine:
-
 ```text
-NO EVIDENCE / FAIL / STALE / WRONG UE
-→ BLOCKED
-
-FRESH UE58_RUNNER_READINESS PASS
-→ Variable darf gesetzt werden
-
-VARIABLE ENABLED
-→ Runtime darf starten
-
-RUNTIME PASS
-→ erst dann CP1 GREEN
+P0_PREFLIGHT
+→ static
+→ quality
+→ GitHub branch gate
+→ optional UE58 readiness
+→ first failing gate
+→ next best action
 ```
+
+`P0_PREFLIGHT: PASS` bedeutet ausdrücklich nur, dass die Vorbedingungen erfüllt sind. Ein CP1-Runtime-PASS entsteht weiterhin ausschließlich durch den echten UE-5.8-Runtime-Workflow.
 
 ### Aktueller belegter Zustand
 
-- Hosted `Validate`: PASS
-- Hosted `Quality Guard`: PASS auf dem vorherigen abgenommenen Head
-- Branch-Protection auf `main`: weiterhin extern offen
-- Self-hosted UE-5.8 Runner: weiterhin extern offen
+- Hosted `Validate`: PASS auf der vorherigen abgenommenen Iteration
+- Hosted `Quality Guard`: PASS auf der vorherigen abgenommenen Iteration
+- P0-Preflight-Orchestrator: implementiert
+- zugehörige Entscheidungs-Regressionstests: implementiert
+- Branch-Protection auf `main`: extern offen
+- Self-hosted UE-5.8 Runner: extern offen
 - reale Readiness-Evidence: noch nicht vorhanden
-- CP1 Runtime: weiterhin `UNOBSERVED/BLOCKED`
+- CP1 Runtime: `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
-- neue P0-Regressionstests auf GitHub PASS sind
-- `main` Branch Gate real PASS ist
-- Self-hosted Runner registriert ist
-- `runner_readiness.py` auf dieser Maschine frisch PASS erzeugt
-- `github_p0_admin.py --apply --enable-runner-variable` diese Evidence akzeptiert
-- danach der echte CP1-Workflow läuft
+- neuer Head über `static-and-contract` und `repository-quality` PASS ist
+- `python3 Scripts/p0_preflight.py` auf dem Admin-Rechner den korrekten GitHub-Engpass meldet
+- nach Branch-Schutz der gleiche Befehl zum UE-Schritt weiterleitet
+- `python3 Scripts/p0_preflight.py --full` auf der UE-Maschine nur bei echter Readiness PASS wird
+- anschließend der reale CP1-Lauf gestartet wird
 
 ### Detailanleitung
 
