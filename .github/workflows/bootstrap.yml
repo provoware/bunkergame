@@ -1,0 +1,44 @@
+name: Bootstrap validated repository baseline
+
+on:
+  push:
+    branches:
+      - infra/cp1-github-control-plane
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout bootstrap commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify validated baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/part_* > /tmp/bunkergame.b64
+          base64 --decode /tmp/bunkergame.b64 > /tmp/bunkergame.tar.gz
+          echo "f8357f99aea38f9788eab5684266ac256342730633d39df22015b1bc43124055  /tmp/bunkergame.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/bunkergame.tar.gz -C .
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap.yml
+          test ! -e .bootstrap
+          python3 Scripts/ci_verify.py
+
+      - name: Commit normal repository tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "chore: materialize validated BUNKER BEATS baseline"
+          git push origin HEAD:infra/cp1-github-control-plane
