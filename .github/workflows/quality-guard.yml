@@ -35,6 +35,9 @@ jobs:
       - name: Repository Quality Guard
         run: python3 Scripts/repo_quality.py
 
+      - name: P0 control-plane regression tests
+        run: python3 -m unittest discover -s Scripts/tests -p 'test_*.py' -v
+
       - name: Git patch whitespace validation for code and config
         if: ${{ github.event_name == 'pull_request' }}
         env:
