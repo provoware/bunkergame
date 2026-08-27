@@ -34,7 +34,7 @@ BASE_STEPS = (
     Step("branch", "Branch-Lifecycle", (sys.executable, "Scripts/branch_lifecycle_guard.py")),
     Step("static", "Statische Projektprüfung", (sys.executable, "Scripts/ci_verify.py")),
     Step("quality", "Repository-Qualität", (sys.executable, "Scripts/repo_quality.py")),
-    Step("github", "GitHub P0 Branch-Gate", (sys.executable, "Scripts/github_p0_status.py")),
+    Step("github", "GitHub P0 Ruleset Live-Beweis", (sys.executable, "Scripts/github_p0_public_verify.py")),
 )
 READINESS_STEP = Step(
     "readiness",
@@ -104,6 +104,7 @@ def main() -> int:
 
     print("=== BUNKER BEATS P0 PREFLIGHT ===")
     print("Modus: READ-ONLY — dieses Skript ändert keine GitHub-Einstellungen.")
+    print("GitHub-Schutzbeweis: öffentliches Ruleset direkt von api.github.com, ohne Token.")
 
     steps = list(BASE_STEPS)
     if args.full:
