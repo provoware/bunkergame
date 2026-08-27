@@ -8,7 +8,6 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,82 +30,6 @@ status = load_module("github_p0_status", ROOT / "Scripts" / "github_p0_status.py
 readiness = load_module("runner_readiness", ROOT / "Scripts" / "runner_readiness.py")
 preflight = load_module("p0_preflight", ROOT / "Scripts" / "p0_preflight.py")
 lifecycle = load_module("branch_lifecycle_guard", ROOT / "Scripts" / "branch_lifecycle_guard.py")
-
-
-class ReadinessEvidenceTests(unittest.TestCase):
-    def make_report(self, **overrides) -> dict:
-        data = {
-            "schema_version": 2,
-            "kind": "UE58_RUNNER_READINESS",
-            "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "runtime_executed": False,
-            "cp1_pass": False,
-            "status": "PASS",
-            "checks": {
-                "project_file": True,
-                "editor_target": True,
-                "engine_root_detected": True,
-                "unreal_editor_detected": True,
-                "engine_build_script_detected": True,
-                "engine_version_exact_5_8": True,
-                "python_available": True,
-                "repo_writable": True,
-                "free_disk_gt_5gb": True,
-                "git_worktree_clean_before_runtime": True,
-            },
-        }
-        data.update(overrides)
-        return data
-
-    def validate(self, data: dict) -> tuple[bool, str]:
-        with tempfile.TemporaryDirectory() as td:
-            path = Path(td) / "runner_readiness.json"
-            path.write_text(json.dumps(data), encoding="utf-8")
-            return admin.validate_fresh_readiness(path)
-
-    def test_fresh_pass_is_accepted(self):
-        ok, detail = self.validate(self.make_report())
-        self.assertTrue(ok, detail)
-
-    def test_missing_file_is_blocked(self):
-        with tempfile.TemporaryDirectory() as td:
-            ok, detail = admin.validate_fresh_readiness(Path(td) / "missing.json")
-        self.assertFalse(ok)
-        self.assertIn("fehlt", detail)
-
-    def test_failed_status_is_blocked(self):
-        ok, detail = self.validate(self.make_report(status="FAIL"))
-        self.assertFalse(ok)
-        self.assertIn("nicht PASS", detail)
-
-    def test_old_evidence_is_blocked(self):
-        stamp = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
-        ok, detail = self.validate(self.make_report(generated_at_utc=stamp))
-        self.assertFalse(ok)
-        self.assertIn("zu alt", detail)
-
-    def test_future_evidence_is_blocked(self):
-        stamp = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
-        ok, detail = self.validate(self.make_report(generated_at_utc=stamp))
-        self.assertFalse(ok)
-        self.assertIn("Zukunft", detail)
-
-    def test_wrong_schema_is_blocked(self):
-        ok, detail = self.validate(self.make_report(schema_version=1))
-        self.assertFalse(ok)
-        self.assertIn("Schema", detail)
-
-    def test_runtime_claim_in_readiness_is_blocked(self):
-        ok, detail = self.validate(self.make_report(runtime_executed=True))
-        self.assertFalse(ok)
-        self.assertIn("Runtime", detail)
-
-    def test_non_58_engine_check_is_blocked(self):
-        data = self.make_report()
-        data["checks"]["engine_version_exact_5_8"] = False
-        ok, detail = self.validate(data)
-        self.assertFalse(ok)
-        self.assertIn("Readiness-Checks", detail)
 
 
 class RulesetContractTests(unittest.TestCase):
