@@ -9,6 +9,8 @@ on:
       - 'BunkerBeats.uproject'
       - 'Launcher/runtime/**'
       - 'Build/Scripts/**'
+      - 'Scripts/run_cp1_ue58.py'
+      - 'Scripts/runner_readiness.py'
       - '.github/workflows/cp1-ue58.yml'
 
 permissions:
@@ -24,14 +26,21 @@ jobs:
     runs-on: [self-hosted, unreal, ue-5.8]
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout trusted repository state
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           clean: true
+
+      - name: UE 5.8 runner readiness
+        run: python3 Scripts/runner_readiness.py
+
       - name: Repository preflight
         run: python3 Scripts/ci_verify.py
+
       - name: Real UE 5.8 CP1 run and gate
         run: python3 Scripts/run_cp1_ue58.py
-      - name: Upload runtime evidence
+
+      - name: Upload runtime and readiness evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
