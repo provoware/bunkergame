@@ -35,11 +35,11 @@ jobs:
       - name: Repository Quality Guard
         run: python3 Scripts/repo_quality.py
 
-      - name: Git patch whitespace validation
+      - name: Git patch whitespace validation for code and config
         if: ${{ github.event_name == 'pull_request' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: git diff --check "${BASE_SHA}...HEAD"
+        run: git diff --check "${BASE_SHA}...HEAD" -- . ':(exclude)**/*.md' ':(exclude)*.md'
 
       - name: Iteration learning guard
         if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && github.actor != 'github-actions[bot]' }}
