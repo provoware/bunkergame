@@ -1,26 +1,36 @@
 #!/usr/bin/env python3
-"""Safely configure the BUNKER BEATS P0 GitHub branch gate via GitHub CLI.
+"""Safely configure the BUNKER BEATS P0 GitHub gate via GitHub CLI.
 
-Default mode is DRY-RUN. Nothing is changed unless --apply is supplied.
-Requires an authenticated `gh` CLI session with repository administration rights.
+Default mode is DRY-RUN. Nothing is changed unless --apply or
+--apply-ruleset is supplied. Ruleset mode is preferred because its complete
+server configuration remains independently readable with repository read access.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO = "provoware/bunkergame"
-BRANCH = "main"
-REQUIRED_CHECKS = ["static-and-contract", "repository-quality"]
+from github_p0_ruleset import (
+    BRANCH,
+    REPO,
+    REQUIRED_CHECKS,
+    RULESET_NAME,
+    evaluate_ruleset,
+    find_named_ruleset,
+    ruleset_payload,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 READINESS_REPORT = ROOT / "Diagnostics" / "Runtime" / "runner_readiness.json"
 MAX_READINESS_AGE_SECONDS = 30 * 60
+HTTP_STATUS_RE = re.compile(r"(?:HTTP\s*)?(403|404|422)\b", re.IGNORECASE)
 
 
 def run(args: list[str], *, input_text: str | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -42,11 +52,164 @@ def require_gh() -> None:
         raise RuntimeError("GitHub CLI ist nicht angemeldet. Einmal `gh auth login` ausführen.")
 
 
+def parse_json_output(text: str, label: str) -> dict:
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{label}: ungültige GitHub-Antwort: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{label}: unerwarteter Antworttyp")
+    return data
+
+
+def parse_json_list(text: str, label: str) -> list:
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{label}: ungültige GitHub-Antwort: {exc}") from exc
+    if not isinstance(data, list):
+        raise RuntimeError(f"{label}: unerwarteter Antworttyp")
+    return data
+
+
+def repo_admin_capability(data: dict) -> tuple[bool, str]:
+    if data.get("full_name") != REPO:
+        return False, f"falsches Repository in GitHub-Antwort: {data.get('full_name')!r}"
+    if data.get("archived") is True:
+        return False, "Repository ist archiviert"
+    permissions = data.get("permissions")
+    if not isinstance(permissions, dict):
+        return False, "Repository-Rechte konnten nicht bestimmt werden"
+    if permissions.get("admin") is True:
+        return True, "Repository-Adminrecht bestätigt"
+    if permissions.get("maintain") is True:
+        return False, "nur Maintain-Recht erkannt; Branch-Administration benötigt Admin"
+    if permissions.get("push") is True:
+        return False, "Schreibrecht erkannt, aber kein Repository-Adminrecht"
+    return False, "kein Repository-Adminrecht erkannt"
+
+
+def classify_gh_error(stderr: str) -> tuple[str, str, str]:
+    text = (stderr or "").strip()
+    lower = text.lower()
+    match = HTTP_STATUS_RE.search(text)
+    status = match.group(1) if match else None
+
+    if status == "403" or "resource not accessible" in lower or "forbidden" in lower:
+        return (
+            "AUTHORIZATION_403",
+            "GitHub verweigert die Administrationsaktion.",
+            "Mit einem Repository-Admin-Konto anmelden. Bei Fine-grained Tokens muss Repository Administration auf Read and write stehen.",
+        )
+    if status == "404" or "not found" in lower:
+        return (
+            "RESOURCE_404",
+            "Repository, Branch oder Ruleset/Protection-Ressource wurde nicht gefunden bzw. ist für diesen Token nicht sichtbar.",
+            f"`gh repo view {REPO}` und `gh api repos/{REPO}/branches/{BRANCH}` prüfen; danach Anmeldung/Berechtigungen kontrollieren.",
+        )
+    if status == "422" or "validation failed" in lower:
+        return (
+            "VALIDATION_422",
+            "GitHub hat die Schutzkonfiguration als ungültig abgelehnt.",
+            "Fehlertext auf ungültige Required-Checks oder nicht unterstützte Ruleset-/Protection-Felder prüfen; nichts erzwingen oder abschwächen.",
+        )
+    return (
+        "UNKNOWN_GITHUB_ERROR",
+        "GitHub-Aktion ist fehlgeschlagen.",
+        "Die unveränderte GitHub-Fehlermeldung prüfen und erst danach erneut anwenden.",
+    )
+
+
+def describe_failure(action: str, stderr: str) -> str:
+    code, meaning, next_step = classify_gh_error(stderr)
+    raw = (stderr or "").strip() or "keine zusätzliche GitHub-Fehlermeldung"
+    return (
+        f"{action} fehlgeschlagen.\n"
+        f"Diagnose: {code}\n"
+        f"Bedeutung: {meaning}\n"
+        f"Nächster Schritt: {next_step}\n"
+        f"GitHub-Meldung: {raw}"
+    )
+
+
+def list_rulesets() -> list:
+    result = run(["gh", "api", f"repos/{REPO}/rulesets"], check=False)
+    if result.returncode != 0:
+        raise RuntimeError(describe_failure("Rulesets lesen", result.stderr))
+    return parse_json_list(result.stdout, "Rulesets lesen")
+
+
+def admin_preflight() -> bool:
+    print("\n=== ADMIN-FÄHIGKEITS-PRÜFUNG ===")
+
+    repo_result = run(["gh", "api", f"repos/{REPO}"], check=False)
+    if repo_result.returncode != 0:
+        print("[BLOCKED] Repository-Metadaten nicht lesbar.")
+        print(describe_failure("Repository-Prüfung", repo_result.stderr))
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    try:
+        repo_data = parse_json_output(repo_result.stdout, "Repository-Prüfung")
+    except RuntimeError as exc:
+        print(f"[BLOCKED] {exc}")
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    admin_ok, detail = repo_admin_capability(repo_data)
+    print(f"[{'PASS' if admin_ok else 'BLOCKED'}] Konto/Rechte: {detail}")
+    print(f"[INFO] Sichtbarkeit: {repo_data.get('visibility', 'unbekannt')}")
+    print(f"[INFO] Default-Branch: {repo_data.get('default_branch', 'unbekannt')}")
+
+    branch_result = run(["gh", "api", f"repos/{REPO}/branches/{BRANCH}"], check=False)
+    if branch_result.returncode != 0:
+        print("[BLOCKED] Zielbranch nicht lesbar.")
+        print(describe_failure("Branch-Prüfung", branch_result.stderr))
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    try:
+        branch_data = parse_json_output(branch_result.stdout, "Branch-Prüfung")
+    except RuntimeError as exc:
+        print(f"[BLOCKED] {exc}")
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    if branch_data.get("name") != BRANCH:
+        print(f"[BLOCKED] Erwarteter Branch {BRANCH!r} wurde nicht bestätigt.")
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    protected = branch_data.get("protected") is True
+    print(f"[INFO] GitHub-Server meldet {BRANCH}.protected={'true' if protected else 'false'}")
+
+    try:
+        rulesets = list_rulesets()
+        named = [item for item in rulesets if isinstance(item, dict) and item.get("name") == RULESET_NAME]
+        print(f"[INFO] P0-Rulesets mit Sollname: {len(named)}")
+        if len(named) > 1:
+            print("[BLOCKED] Mehrere gleichnamige P0-Rulesets gefunden; zuerst Duplikate manuell bereinigen.")
+            print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+            return False
+    except RuntimeError as exc:
+        print(f"[BLOCKED] {exc}")
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    if not admin_ok:
+        print("GITHUB_ADMIN_PREFLIGHT: BLOCKED")
+        return False
+
+    print("[PASS] Repository, Branch, Ruleset-Lesepfad und Repository-Adminrecht bestätigt.")
+    print("GITHUB_ADMIN_PREFLIGHT: PASS")
+    return True
+
+
 def protection_payload() -> dict:
     return {
         "required_status_checks": {
             "strict": True,
-            "contexts": REQUIRED_CHECKS,
+            "contexts": list(REQUIRED_CHECKS),
         },
         "enforce_admins": True,
         "required_pull_request_reviews": {
@@ -71,17 +234,18 @@ def show_plan() -> None:
     print(f"Repository: {REPO}")
     print(f"Branch:     {BRANCH}")
     print("Modus:      DRY-RUN")
-    print("\nGeplante Schutzregeln:")
+    print("\nEmpfohlen: evidence-freundliches Repository Ruleset")
+    print(f"- Name: {RULESET_NAME}")
     print("- Pull Request vor Integration")
     print("- Branch muss vor Merge aktuell sein")
-    print("- Required Check: static-and-contract")
-    print("- Required Check: repository-quality")
-    print("- Admins unterliegen dem Schutz")
-    print("- veraltete Reviews werden verworfen")
+    for check in REQUIRED_CHECKS:
+        print(f"- Required Check: {check}")
+    print("- keine Bypass-Akteure")
     print("- offene Review-Diskussionen blockieren")
     print("- Force-Push gesperrt")
     print("- Branch-Löschen gesperrt")
-    print("\nNicht global required: cp1-runtime")
+    print("\nAlternative/Legacy: klassische Branch Protection über --apply")
+    print("Nicht global required: cp1-runtime")
     print("Grund: Der UE-5.8-Self-hosted-Runner ist noch nicht dauerhaft verfügbar.")
 
 
@@ -101,18 +265,82 @@ def apply_protection() -> None:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"Branch-Schutz konnte nicht gesetzt werden:\n{result.stderr.strip()}")
-    print("[PASS] Branch-Schutz wurde von GitHub angenommen.")
+        raise RuntimeError(describe_failure("Branch-Schutz setzen", result.stderr))
+    print("[PASS] Klassische Branch Protection wurde von GitHub angenommen.")
 
 
-def verify() -> bool:
+def apply_ruleset() -> dict:
+    items = list_rulesets()
+    duplicates = [item for item in items if isinstance(item, dict) and item.get("name") == RULESET_NAME]
+    if len(duplicates) > 1:
+        raise RuntimeError("Mehrere gleichnamige P0-Rulesets gefunden; automatisches Upsert bleibt aus Sicherheitsgründen gesperrt.")
+
+    current = find_named_ruleset(items)
+    ruleset_id = current.get("id") if isinstance(current, dict) else None
+    method = "PUT" if isinstance(ruleset_id, int) else "POST"
+    endpoint = f"repos/{REPO}/rulesets/{ruleset_id}" if isinstance(ruleset_id, int) else f"repos/{REPO}/rulesets"
+    action = "Ruleset aktualisieren" if method == "PUT" else "Ruleset anlegen"
+
     result = run(
-        ["gh", "api", f"repos/{REPO}/branches/{BRANCH}/protection"],
+        ["gh", "api", "--method", method, endpoint, "--input", "-"],
+        input_text=json.dumps(ruleset_payload()),
         check=False,
     )
     if result.returncode != 0:
-        print("[FAIL] Branch-Schutz konnte nicht gelesen werden.")
-        print(result.stderr.strip())
+        raise RuntimeError(describe_failure(action, result.stderr))
+
+    data = parse_json_output(result.stdout, action)
+    ok, failures = evaluate_ruleset(data)
+    if not ok:
+        raise RuntimeError("GitHub nahm das Ruleset an, aber die Antwort erfüllt den P0-Vertrag nicht: " + "; ".join(failures))
+
+    print(f"[PASS] {action}: {RULESET_NAME}")
+    print(f"[PASS] Ruleset-ID: {data.get('id', 'unbekannt')}")
+    return data
+
+
+def verify_ruleset() -> bool:
+    try:
+        items = list_rulesets()
+    except RuntimeError as exc:
+        print(f"[FAIL] {exc}")
+        return False
+
+    current = find_named_ruleset(items)
+    if not isinstance(current, dict) or not isinstance(current.get("id"), int):
+        print(f"[FAIL] Ruleset {RULESET_NAME!r} nicht eindeutig gefunden.")
+        return False
+
+    result = run(["gh", "api", f"repos/{REPO}/rulesets/{current['id']}"], check=False)
+    if result.returncode != 0:
+        print("[FAIL] Ruleset konnte nicht serverseitig zurückgelesen werden.")
+        print(describe_failure("Ruleset nachprüfen", result.stderr))
+        return False
+
+    try:
+        data = parse_json_output(result.stdout, "Ruleset nachprüfen")
+    except RuntimeError as exc:
+        print(f"[FAIL] {exc}")
+        return False
+
+    ok, failures = evaluate_ruleset(data)
+    print("\n=== RULESET-NACHPRÜFUNG ===")
+    print(f"Name:        {'PASS' if data.get('name') == RULESET_NAME else 'FAIL'}")
+    print(f"Enforcement: {'PASS' if data.get('enforcement') == 'active' else 'FAIL'}")
+    for check in REQUIRED_CHECKS:
+        print(f"Required Check {check}: {'PASS' if not any(check in item for item in failures) else 'FAIL'}")
+    if failures:
+        for failure in failures:
+            print(f"[FAIL] {failure}")
+    print(f"GITHUB_P0_RULESET_GATE: {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
+def verify() -> bool:
+    result = run(["gh", "api", f"repos/{REPO}/branches/{BRANCH}/protection"], check=False)
+    if result.returncode != 0:
+        print("[FAIL] Branch-Schutz konnte nach dem Schreiben nicht detailliert gelesen werden.")
+        print(describe_failure("Branch-Schutz nachprüfen", result.stderr))
         return False
 
     try:
@@ -135,7 +363,7 @@ def verify() -> bool:
     pr_gate = bool(data.get("required_pull_request_reviews"))
     strict = data.get("required_status_checks", {}).get("strict", False)
 
-    print("\n=== NACHPRÜFUNG ===")
+    print("\n=== CLASSIC-NACHPRÜFUNG ===")
     print(f"Pull-Request-Gate:       {'PASS' if pr_gate else 'FAIL'}")
     print(f"Required Checks aktuell: {'PASS' if strict else 'FAIL'}")
     print(f"Admins geschützt:        {'PASS' if admins else 'FAIL'}")
@@ -145,7 +373,7 @@ def verify() -> bool:
         print(f"Check {name}: {'PASS' if name in checks else 'FAIL'}")
 
     ok = pr_gate and strict and admins and not force and not delete and not missing
-    print(f"\nGITHUB_P0_BRANCH_GATE: {'PASS' if ok else 'FAIL'}")
+    print(f"GITHUB_P0_BRANCH_GATE: {'PASS' if ok else 'FAIL'}")
     return ok
 
 
@@ -206,26 +434,20 @@ def set_runner_variable() -> None:
         )
     print(f"[PASS] {detail}")
     result = run(
-        [
-            "gh",
-            "variable",
-            "set",
-            "UE58_RUNNER_ENABLED",
-            "--repo",
-            REPO,
-            "--body",
-            "true",
-        ],
+        ["gh", "variable", "set", "UE58_RUNNER_ENABLED", "--repo", REPO, "--body", "true"],
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"Repository-Variable konnte nicht gesetzt werden:\n{result.stderr.strip()}")
+        raise RuntimeError(describe_failure("Repository-Variable setzen", result.stderr))
     print("[PASS] UE58_RUNNER_ENABLED=true gesetzt.")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--apply", action="store_true", help="Branch-Schutz wirklich setzen")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--apply", action="store_true", help="klassische Branch Protection wirklich setzen")
+    group.add_argument("--apply-ruleset", action="store_true", help="empfohlenes evidence-freundliches P0 Ruleset anlegen/aktualisieren")
+    parser.add_argument("--doctor", action="store_true", help="nur GitHub-/Admin-Fähigkeit diagnostizieren; niemals schreiben")
     parser.add_argument(
         "--enable-runner-variable",
         action="store_true",
@@ -240,13 +462,26 @@ def main() -> int:
         print(f"\n[BLOCKED] {exc}")
         return 3
 
-    if not args.apply:
-        print("\nKeine Änderung durchgeführt. Zum Anwenden: python3 Scripts/github_p0_admin.py --apply")
+    if args.doctor:
+        return 0 if admin_preflight() else 3
+
+    if not args.apply and not args.apply_ruleset:
+        print("\nKeine Änderung durchgeführt.")
+        print("Empfohlen: python3 Scripts/github_p0_admin.py --doctor")
+        print("Danach:    python3 Scripts/github_p0_admin.py --apply-ruleset")
         return 0
 
+    if not admin_preflight():
+        print("[BLOCKED] Schreibvorgang wurde vor dem ersten GitHub-Write gestoppt.")
+        return 3
+
     try:
-        apply_protection()
-        ok = verify()
+        if args.apply_ruleset:
+            apply_ruleset()
+            ok = verify_ruleset()
+        else:
+            apply_protection()
+            ok = verify()
         if not ok:
             return 2
         if args.enable_runner_variable:

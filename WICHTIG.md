@@ -2,89 +2,103 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-005 — Nach Merge nie still auf demselben Feature-Branch weiterentwickeln
+## W-2026-08-27-007 — GitHub-Schutz über unabhängig lesbares Ruleset beweisen
 
-**Kategorie:** Git-Workflow / Prozessintegrität / Fehlerprävention  
+**Kategorie:** Evidence Integrity / GitHub Rulesets / Robustheit / Codequalität  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT — als read-only Guard + Regressionstest  
-**Nutzen:** 9/10  
-**Aufwand:** 2/10  
-**Risiko der Umsetzung:** 1/10
+**Status:** 🟢 IMPLEMENTIERT — reales Ruleset auf GitHub noch anzuwenden  
+**Nutzen:** 10/10  
+**Aufwand:** 4/10  
+**Risiko der Umsetzung:** 2/10
 
 ### Beobachtung
 
-PR #1 wurde bereits gemergt, während danach noch weitere Änderungen auf demselben Feature-Branch entstanden. Diese Commits gehörten dadurch nicht mehr zum bereits abgeschlossenen PR und erhielten zunächst keinen neuen PR-/CI-Lifecycle.
-
-Das ist kein Codefehler, aber eine relevante Prozessschwachstelle: Ein bereits gemergter Branch kann optisch wie ein weiterhin aktiver Arbeitszweig wirken, obwohl die neue Arbeit außerhalb des abgeschlossenen Review-Gates liegt.
+Die klassische Branch-Protection kann korrekt funktionieren, ihr Detail-Endpunkt ist für manche GitHub-Integrationen aber nicht lesbar. Dadurch entsteht ein ungünstiger Zustand: Der Schutz kann auf dem Admin-Rechner gesetzt werden, während eine unabhängige zweite Stelle die vollständige Konfiguration wegen eines 403 nicht nachprüfen kann.
 
 ### Verbesserungsvorschlag
 
-Ein read-only Branch-Lifecycle-Gate vor die technische P0-Prüfung setzen:
+Den P0-Schutz bevorzugt als **Repository Ruleset** abbilden. Rulesets sind laut GitHub bereits mit Repository-Lesezugriff sichtbar. Dadurch kann der vollständige Serverzustand nach dem einmaligen Admin-Apply unabhängig nachgeprüft werden.
 
 ```text
-Arbeitsbranch bestimmen
-→ GitHub nach bereits gemergten PRs dieses Branches fragen
-→ Commits vor origin/main bestimmen
-→ wenn bereits gemergt + neue Commits vorhanden:
-   FAIL
-   → neuen Branch vom aktuellen main verlangen
+Admin-Rechner
+→ --doctor
+→ --apply-ruleset
+→ GitHub speichert aktives Ruleset
+
+Unabhängige Prüfung
+→ GET /repos/provoware/bunkergame/rulesets
+→ Ruleset-ID bestimmen
+→ vollständiges Ruleset lesen
+→ gemeinsamer Contract-Validator
+→ P0 PASS/FAIL
 ```
-
-### Umgesetzt
-
-- `Scripts/branch_lifecycle_guard.py` ergänzt.
-- das Skript verändert weder Git noch GitHub.
-- `main` wird nicht als Feature-Branch-Reuse gewertet.
-- bereits gemergter Feature-Branch mit neuen Commits wird blockiert.
-- noch nie gemergter oder aktuell offener Arbeitsbranch bleibt zulässig.
-- fehlende GitHub-CLI-/Auth-Daten erzeugen `BLOCKED`, keinen erfundenen PASS.
-- der Guard wurde als **erste Stufe** in `Scripts/p0_preflight.py` aufgenommen.
-- Regressionstests decken main, merged+ahead, merged+0, nie gemergt und ungültige PR-Antwort ab.
 
 ### Grund
 
-Ein Review-/CI-Prozess ist nur belastbar, wenn neue Arbeit nach einem Merge wieder einen neuen nachvollziehbaren Branch-/PR-Zyklus erhält. Sonst können Folgeänderungen versehentlich außerhalb des erwarteten Gate-Lebenszyklus landen.
+Ein Beweis ist stärker, wenn seine Prüfung nicht dieselbe privilegierte Schnittstelle benötigt wie seine Erzeugung. Das Ruleset trennt daher **Schreiben mit Adminrecht** von **Lesen/Prüfen mit Read-Zugriff**. So wird die Infrastruktur-Evidence reproduzierbarer und weniger abhängig von einem einzelnen Token oder GitHub-App-Berechtigungsprofil.
+
+### Umgesetzt
+
+- `Scripts/github_p0_ruleset.py` als zentrale, reine Vertragslogik ergänzt.
+- ein einziger kanonischer Ruleset-Payload verhindert Drift zwischen Admin-, Status- und Testlogik.
+- Ruleset zielt ausschließlich auf `refs/heads/main`.
+- Enforcement muss exakt `active` sein; `evaluate` zählt niemals als realer Schutz.
+- Pull Request vor Integration ist verpflichtend.
+- Solo-Repository bleibt mit `required_approving_review_count=0` bedienbar.
+- offene Review-Diskussionen müssen gelöst sein.
+- `static-and-contract` und `repository-quality` sind Required Checks.
+- Branch muss vor Merge aktuell sein.
+- `deletion` blockiert das Löschen von `main`.
+- `non_fast_forward` blockiert Force-Push.
+- unerwartete Bypass-Akteure führen zu FAIL.
+- `cp1-runtime` bleibt bis zum stabilen echten UE-Runner bewusst nicht global required.
+- `github_p0_admin.py --apply-ruleset` arbeitet als sicheres Upsert: vorhandenes Soll-Ruleset aktualisieren, sonst neu anlegen; Duplikate blockieren.
+- nach jedem Write erfolgt serverseitiges Read-back mit demselben Contract-Validator.
+- `github_p0_status.py` prüft Rulesets zuerst und fällt nur bei Bedarf auf klassische Branch Protection zurück.
+- Hosted Regressionstests prüfen aktive/unechte Enforcement-Zustände, Required Checks, Strictness, Force-Push/Delete-Sperre, Bypass und Duplikate.
 
 ### Erwartete Wirkung
 
-- keine stillen Nacharbeiten auf bereits abgeschlossenen Feature-Branches
-- sauberere PR-Historie
-- jede Iteration erhält wieder einen eigenen prüfbaren Lifecycle
-- weniger Verwechslung zwischen gemergtem Stand und neuer Arbeit
-- bessere Grundlage für Branch Protection und Required Checks
+- unabhängigere und leichter reproduzierbare Infrastruktur-Evidence
+- weniger Abhängigkeit vom klassischen Protection-Detail-Endpunkt
+- kein Unterschied zwischen Soll-Payload und Prüfvertrag
+- weniger duplizierte GitHub-Regellogik
+- eindeutige Anti-Fake-Regeln für Testfixtures
+- bessere Wartbarkeit durch zentrales Contract-Modul
 
 ### Technischer Effekt
 
-Der P0-Preflight beginnt jetzt mit:
-
 ```text
-BRANCH_LIFECYCLE
-→ static
-→ quality
-→ GitHub branch gate
-→ optional UE58 readiness
+P0 RULESET CONTRACT
+→ canonical payload
+→ safe upsert
+→ live server read-back
+→ same evaluator
+→ independent read-only verification
 ```
 
-Ein Branch-Lifecycle-FAIL hat bewusst Vorrang vor allen nachfolgenden technischen Prüfungen.
+Testdateien dürfen den Evaluator prüfen, aber nie einen Live-Server-PASS ersetzen. Ein echtes P0-Ruleset-PASS entsteht nur aus einer von GitHub gelesenen aktiven Ruleset-Konfiguration.
 
 ### Aktueller belegter Zustand
 
-- PR #1: gemergt
-- Folgebranch: `infra/p0-postmerge-hardening`
-- Branch-Lifecycle-Guard: implementiert
-- Regressionstests: implementiert
-- Branch Protection `main`: weiterhin extern offen
-- Self-hosted UE-5.8 Runner: weiterhin extern offen
-- CP1 Runtime: weiterhin `UNOBSERVED/BLOCKED`
+- GitHub-Ruleset-Liste serverseitig aktuell leer (`[]`)
+- `main` serverseitig weiterhin ungeschützt
+- Repository-Rolle der verbundenen Identität: `admin=true`
+- Ruleset-Contract und Apply-/Verify-Pfad: implementiert
+- Anti-Fake-Regressionstests: implementiert
+- reales Ruleset: noch nicht angewendet
+- Self-hosted UE-5.8 Runner: weiterhin offen
+- CP1 Runtime: `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
-- Folge-PR gegen `main` offen ist
-- `static-and-contract` PASS ist
-- `repository-quality` PASS ist
-- Iteration Guard den neuen W-/CQ-Eintrag akzeptiert
-- die Nacharbeiten ausschließlich über den neuen Folge-PR integriert werden
+- Hosted `static-and-contract` PASS ist
+- Hosted `repository-quality` PASS ist
+- `python3 Scripts/github_p0_admin.py --doctor` PASS meldet
+- `python3 Scripts/github_p0_admin.py --apply-ruleset` das aktive Ruleset serverseitig anlegt
+- der Ruleset-Endpunkt das vollständige Soll unabhängig lesbar zurückliefert
+- `github_p0_status.py` `GITHUB_P0_EVIDENCE_PATH: RULESET` und `GITHUB_P0_BRANCH_GATE: PASS` meldet
 
 ### Detailanleitung
 
-Siehe `Docs/GITHUB_P0_SETUP.md` und Issue #2.
+Siehe `Docs/GITHUB_P0_SETUP.md`, `Docs/GITHUB_ADMIN_DIAGNOSE.md` und Issue #2.

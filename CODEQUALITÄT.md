@@ -298,3 +298,121 @@ Der Guard ist die erste Stufe von `Scripts/p0_preflight.py`. Die reine Entscheid
 **Fehlbedienungsschutz:** hoch  
 **CI-Evidence-Zuordnung:** hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-006 — GitHub-Adminfähigkeit vor jeder Schutzänderung beweisen
+
+**Iteration:** P0 Admin Diagnostics  
+**Kategorie:** GitHub-Administration / Fehlerdiagnose / Safety by Design  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — reale Serveranwendung weiterhin extern  
+**Aufwand:** 3/10  
+**Risiko:** 1/10
+
+### Verbesserungsvorschlag
+
+Vor einer Branch-Protection-Schreiboperation nicht nur `gh auth status`, sondern die **konkrete Administrationsfähigkeit für das Zielrepository** maschinell beweisen. Fehler der GitHub-API sollen außerdem in unterscheidbare, handlungsorientierte Kategorien übersetzt werden.
+
+### Grund
+
+Eine gültige GitHub-Anmeldung beweist nicht, dass das verwendete Konto bzw. Token `provoware/bunkergame` administrieren darf. Ein Nutzer kann korrekt angemeldet sein und trotzdem nur Push- oder Maintain-Rechte besitzen. Ohne vorgelagerte Fähigkeitsprüfung führt das zu unnötigen Apply-Versuchen und schwer verständlichen API-Fehlern.
+
+### Wirkung
+
+- kein Branch-Protection-Apply ohne bestätigtes Repository-Adminrecht
+- 403, 404 und 422 führen zu unterschiedlichen Reparaturpfaden
+- falscher Repository- oder Branch-Kontext wird früh erkannt
+- Serverstatus `protected=false` kann ohne Detail-API eindeutig erkannt werden
+- weniger Fehlversuche und weniger manuelle Interpretation von GitHub-Ausgaben
+
+### Technischer Effekt
+
+`github_p0_admin.py` besitzt jetzt `--doctor` und prüft read-only:
+
+```text
+gh installiert + angemeldet
+→ repos/provoware/bunkergame
+→ full_name korrekt
+→ nicht archiviert
+→ permissions.admin == true
+→ main vorhanden
+→ protected-Serverhinweis
+→ GITHUB_ADMIN_PREFLIGHT: PASS/BLOCKED
+```
+
+Die API-Fehlerklassifikation unterscheidet:
+
+- `AUTHORIZATION_403`
+- `RESOURCE_404`
+- `VALIDATION_422`
+- `UNKNOWN_GITHUB_ERROR`
+
+`github_p0_status.py` fragt zuerst den normalen Branch-Endpunkt ab. Bei `protected=false` ist der Branch-Gate-Fehler damit direkt bewiesen. Bei `protected=true` folgt erst die vollständige Detailprüfung der Schutzregeln und Required Checks.
+
+Die Logik ist durch zusätzliche Hosted-Regressionstests abgesichert.
+
+### Erwarteter Nutzen
+
+**Diagnosequalität:** sehr hoch  
+**Laienfreundlichkeit:** sehr hoch  
+**Fehlbedienungsschutz:** sehr hoch  
+**Admin-Sicherheit:** hoch  
+**Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-007 — Schutzkonfiguration von privilegiertem Schreibweg entkoppeln
+
+**Iteration:** P0 Independently Verifiable Ruleset Evidence  
+**Kategorie:** Evidence Integrity / GitHub Rulesets / Wartbarkeit  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — reales Ruleset serverseitig noch anzuwenden  
+**Aufwand:** 4/10  
+**Risiko:** 2/10
+
+### Verbesserungsvorschlag
+
+Den GitHub-P0-Schutz bevorzugt als Repository Ruleset statt ausschließlich als klassische Branch Protection abbilden und die komplette Soll-/Ist-Prüfung in ein gemeinsames, reines Contract-Modul auslagern.
+
+### Grund
+
+Die klassische Protection-Detail-API kann für bestimmte GitHub-Apps oder Token trotz sichtbarem Repositoryzustand mit 403 blockiert sein. Dann hängen Erzeugung und unabhängige Verifikation zu stark von derselben privilegierten Zugriffsschicht ab. Repository Rulesets sind dagegen bereits mit Repository-Lesezugriff sichtbar und eignen sich deshalb besser als unabhängig prüfbare Infrastruktur-Evidence.
+
+### Wirkung
+
+- Schutz kann nach dem Admin-Write durch eine zweite read-only Stelle vollständig geprüft werden
+- Soll-Payload und Ist-Validator verwenden dieselben zentralen Konstanten
+- weniger duplizierte GitHub-Regellogik
+- Ruleset-Duplikate werden nicht still erzeugt
+- Testfixtures validieren nur Logik und können keinen Live-PASS vortäuschen
+- klassische Branch Protection bleibt als kompatibler Fallback erhalten
+
+### Technischer Effekt
+
+Neu ist `Scripts/github_p0_ruleset.py` als pure Contract-Schicht. Sie definiert zentral:
+
+```text
+Repository + main
+→ Ruleset-Name
+→ active enforcement
+→ PR-Regel
+→ static-and-contract
+→ repository-quality
+→ strict/up-to-date
+→ deletion block
+→ non-fast-forward block
+→ keine Bypass-Akteure
+```
+
+`github_p0_admin.py --apply-ruleset` führt ein sicheres Create-or-Update aus und liest anschließend exakt dieses Ruleset zurück. `github_p0_status.py` bevorzugt den Ruleset-Lesepfad und nutzt klassische Branch Protection nur noch als Fallback.
+
+Die Regressionstests lehnen insbesondere `enforcement=evaluate`, fehlende Required Checks, fehlende Strictness, Bypass-Akteure sowie fehlende Delete-/Force-Push-Sperren ab.
+
+### Erwarteter Nutzen
+
+**Evidence-Integrität:** sehr hoch  
+**Robustheit:** sehr hoch  
+**Codequalität:** sehr hoch  
+**Wartbarkeit:** sehr hoch  
+**Gameplay-Risiko:** keines
