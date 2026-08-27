@@ -26,5 +26,33 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify public P0 Ruleset from GitHub
-        run: python3 Scripts/github_p0_public_verify.py
+      - name: Collect live P0 infrastructure evidence
+        id: collect
+        continue-on-error: true
+        run: >-
+          python3 Scripts/github_p0_evidence.py
+          --output Diagnostics/Infrastructure/github_p0_evidence.json
+
+      - name: Validate stored evidence against GitHub live
+        id: validate
+        continue-on-error: true
+        run: >-
+          python3 Scripts/github_p0_evidence_validate.py
+          --evidence Diagnostics/Infrastructure/github_p0_evidence.json
+
+      - name: Upload P0 infrastructure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: p0-infrastructure-evidence
+          path: Diagnostics/Infrastructure/github_p0_evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce observer result after artifact upload
+        if: always()
+        run: |
+          echo "Collector: ${{ steps.collect.outcome }}"
+          echo "Validator: ${{ steps.validate.outcome }}"
+          test "${{ steps.collect.outcome }}" = "success"
+          test "${{ steps.validate.outcome }}" = "success"
