@@ -14,10 +14,12 @@ CODEQ = "CODEQUALITÄT.md"
 
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["git", *args],
+        ["git", "-c", "core.quotepath=false", *args],
         cwd=ROOT,
         check=check,
         text=True,
+        encoding="utf-8",
+        errors="strict",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
