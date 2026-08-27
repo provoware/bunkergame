@@ -1,0 +1,42 @@
+name: CP1 UE 5.8 Runtime
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Source/**'
+      - 'Config/**'
+      - 'BunkerBeats.uproject'
+      - 'Launcher/runtime/**'
+      - 'Build/Scripts/**'
+      - '.github/workflows/cp1-ue58.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cp1-ue58-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cp1-runtime:
+    if: ${{ vars.UE58_RUNNER_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: [self-hosted, unreal, ue-5.8]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: true
+      - name: Repository preflight
+        run: python3 Scripts/ci_verify.py
+      - name: Real UE 5.8 CP1 run and gate
+        run: python3 Scripts/run_cp1_ue58.py
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cp1-runtime-evidence-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            Diagnostics/Runtime/**
+            Saved/Automation/CP1_RuntimeTelemetry.json
