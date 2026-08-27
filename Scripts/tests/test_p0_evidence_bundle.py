@@ -57,6 +57,17 @@ class InfrastructureEvidenceBundleTests(unittest.TestCase):
     def make_pass_evidence(self, *, now: datetime | None = None) -> dict:
         return evidence.collect_evidence(getter=self.make_getter(), now=now)
 
+    def test_critical_evidence_files_are_present(self):
+        critical = (
+            "Scripts/github_p0_ruleset.py",
+            "Scripts/github_p0_public_verify.py",
+            "Scripts/github_p0_evidence.py",
+            "Scripts/github_p0_evidence_validate.py",
+            ".github/workflows/p0-infrastructure-observer.yml",
+        )
+        missing = [rel for rel in critical if not (ROOT / rel).is_file()]
+        self.assertEqual(missing, [])
+
     def test_collector_creates_pass_bundle_from_complete_live_contract(self):
         data = self.make_pass_evidence()
         self.assertEqual(data["status"], "PASS")
