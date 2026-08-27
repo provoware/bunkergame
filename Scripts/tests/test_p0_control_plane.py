@@ -27,6 +27,7 @@ def load_module(name: str, path: Path):
 admin = load_module("github_p0_admin", ROOT / "Scripts" / "github_p0_admin.py")
 readiness = load_module("runner_readiness", ROOT / "Scripts" / "runner_readiness.py")
 preflight = load_module("p0_preflight", ROOT / "Scripts" / "p0_preflight.py")
+lifecycle = load_module("branch_lifecycle_guard", ROOT / "Scripts" / "branch_lifecycle_guard.py")
 
 
 class ReadinessEvidenceTests(unittest.TestCase):
@@ -136,45 +137,67 @@ class EngineVersionTests(unittest.TestCase):
         self.assertIn("missing", detail)
 
 
+class BranchLifecycleTests(unittest.TestCase):
+    def test_main_is_never_feature_branch_reuse(self):
+        self.assertFalse(lifecycle.branch_reused_after_merge("main", [{"number": 1}], 3))
+
+    def test_merged_feature_branch_with_new_commits_is_blocked(self):
+        self.assertTrue(lifecycle.branch_reused_after_merge("feature/x", [{"number": 1}], 2))
+
+    def test_merged_feature_branch_without_new_commits_is_not_reuse(self):
+        self.assertFalse(lifecycle.branch_reused_after_merge("feature/x", [{"number": 1}], 0))
+
+    def test_open_or_never_merged_branch_is_allowed(self):
+        self.assertFalse(lifecycle.branch_reused_after_merge("feature/x", [], 5))
+
+    def test_invalid_pr_json_is_safe_empty(self):
+        self.assertEqual(lifecycle.parse_merged_prs("not-json"), [])
+
+
 class PreflightDecisionTests(unittest.TestCase):
     def result(self, key: str, code: int) -> object:
         steps = {step.key: step for step in (*preflight.BASE_STEPS, preflight.READINESS_STEP)}
         return preflight.StepResult(steps[key], code)
 
-    def test_static_failure_is_first_action(self):
-        results = [self.result("static", 1), self.result("quality", 0), self.result("github", 0)]
-        self.assertIn("Statische Fehler", preflight.next_action(results, False))
-
-    def test_quality_failure_is_second_action(self):
-        results = [self.result("static", 0), self.result("quality", 1), self.result("github", 0)]
-        self.assertIn("Quality Guard", preflight.next_action(results, False))
-
-    def test_github_failure_points_to_branch_admin(self):
-        results = [self.result("static", 0), self.result("quality", 0), self.result("github", 2)]
-        self.assertIn("github_p0_admin.py --apply", preflight.next_action(results, False))
-
-    def test_hosted_pass_points_to_ue_machine(self):
-        results = [self.result("static", 0), self.result("quality", 0), self.result("github", 0)]
-        self.assertIn("--full", preflight.next_action(results, False))
-
-    def test_full_readiness_failure_blocks_activation(self):
-        results = [
+    def baseline(self) -> list[object]:
+        return [
+            self.result("branch", 0),
             self.result("static", 0),
             self.result("quality", 0),
             self.result("github", 0),
-            self.result("readiness", 1),
         ]
+
+    def test_branch_failure_has_highest_priority(self):
+        results = self.baseline()
+        results[0] = self.result("branch", 2)
+        self.assertIn("Neuen Arbeitsbranch", preflight.next_action(results, False))
+
+    def test_static_failure_is_next_action(self):
+        results = self.baseline()
+        results[1] = self.result("static", 1)
+        self.assertIn("Statische Fehler", preflight.next_action(results, False))
+
+    def test_quality_failure_is_next_action(self):
+        results = self.baseline()
+        results[2] = self.result("quality", 1)
+        self.assertIn("Quality Guard", preflight.next_action(results, False))
+
+    def test_github_failure_points_to_branch_admin(self):
+        results = self.baseline()
+        results[3] = self.result("github", 2)
+        self.assertIn("github_p0_admin.py --apply", preflight.next_action(results, False))
+
+    def test_hosted_pass_points_to_ue_machine(self):
+        self.assertIn("--full", preflight.next_action(self.baseline(), False))
+
+    def test_full_readiness_failure_blocks_activation(self):
+        results = self.baseline() + [self.result("readiness", 1)]
         action = preflight.next_action(results, True)
         self.assertIn("Readiness", action)
         self.assertNotIn("enable-runner-variable", action)
 
     def test_full_pass_points_to_guarded_activation(self):
-        results = [
-            self.result("static", 0),
-            self.result("quality", 0),
-            self.result("github", 0),
-            self.result("readiness", 0),
-        ]
+        results = self.baseline() + [self.result("readiness", 0)]
         action = preflight.next_action(results, True)
         self.assertIn("--enable-runner-variable", action)
         self.assertIn("CP1 UE 5.8 Runtime", action)
