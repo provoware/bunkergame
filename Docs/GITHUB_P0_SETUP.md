@@ -1,32 +1,30 @@
 # BUNKER BEATS — GITHUB P0 SETUP
 
-> Ziel: `main` absichern, Required Checks verbindlich machen und den UE-5.8-Self-hosted-Runner kontrolliert aktivieren.
+> Ziel: `main` absichern, den Schutz **unabhängig beweisbar** machen und danach den UE-5.8-Self-hosted-Runner kontrolliert aktivieren.
 
 ---
 
-## 1. REIHENFOLGE
-
-Nicht alles gleichzeitig aktivieren.
+## 1. EMPFOHLENE REIHENFOLGE
 
 ```text
-Quality Guard grün
+Hosted Quality grün
    ↓
-Branch Ruleset für main
+Admin-Doctor PASS
    ↓
-Required Checks setzen
+aktives Repository Ruleset für main
    ↓
-Self-hosted Runner registrieren
+öffentlicher Ruleset-Live-Beweis PASS
+   ↓
+Self-hosted UE-5.8 Runner
    ↓
 Runner Readiness PASS
    ↓
 UE58_RUNNER_ENABLED=true
    ↓
-CP1 Runtime ausführen
+echter CP1 Runtime-Lauf
 ```
 
-### Empfohlener Ein-Befehl-Einstieg
-
-Auf dem Admin-/Entwicklungsrechner:
+### Ein-Befehl-Einstieg
 
 ```bash
 python3 Scripts/p0_preflight.py
@@ -38,81 +36,241 @@ Auf der echten UE-5.8-Maschine:
 python3 Scripts/p0_preflight.py --full
 ```
 
-Der Preflight ist **read-only**. Er verändert keine GitHub-Einstellung, führt die vorhandenen Gates in definierter Reihenfolge aus und nennt den ersten sinnvollen nächsten Schritt.
+Der Preflight ist read-only. Sein GitHub-Schutzschritt verwendet `github_p0_public_verify.py` und liest das öffentliche Ruleset **ohne GitHub-Login oder Token** direkt von GitHub.
 
-`P0_PREFLIGHT: PASS` ist **kein** CP1-Runtime-PASS.
+`P0_PREFLIGHT: PASS` ist niemals ein CP1-Runtime-PASS.
 
 ---
 
-## 2. BRANCH-PROTECTION / RULESET FÜR `main`
+## 2. WARUM RULESET STATT NUR KLASSISCHER BRANCH PROTECTION?
 
-### Empfohlener Weg
+Die klassische Branch-Protection bleibt unterstützt. Ihr Detail-Endpunkt kann für bestimmte GitHub-Apps oder Token jedoch mit 403 gesperrt sein. Dadurch kann eine zweite Stelle den vollständigen Schutz nicht immer unabhängig nachprüfen.
 
-GitHub:
-
-`Repository → Settings → Rules → Rulesets → New branch ruleset`
-
-### Zielbranch
-
-Default branch / `main`.
-
-### Empfohlene Regeln
-
-- Pull Request vor Merge erforderlich
-- Required status checks vor Merge erforderlich
-- Branch vor Merge auf aktuellem Stand halten
-- Force-Push blockieren
-- Branch-Löschen blockieren
-- direkte Änderungen an `main` vermeiden
-
-### Required Checks
-
-Die tatsächlich erzeugten Check-Namen sind:
+Repository Rulesets haben hier einen wichtigen Vorteil: GitHub erlaubt ihre Ansicht bereits mit Repository-Lesezugriff. Deshalb wird der P0-Schutz bevorzugt als Ruleset angelegt.
 
 ```text
-static-and-contract
-repository-quality
+privilegierter Schreibweg
+→ GitHub speichert Ruleset
+
+unabhängiger Lesepfad
+→ Ruleset-Liste lesen
+→ Ruleset-Detail lesen
+→ denselben P0-Contract prüfen
 ```
 
-Bedeutung:
-
-- `static-and-contract` = Workflow `Validate`
-- `repository-quality` = Workflow `Quality Guard`
-
-> Nicht nur nach dem Workflow-Namen suchen. GitHub Branch Protection arbeitet mit den erzeugten Status-/Job-Checks.
-
-### Review-Anforderung
-
-Bei einem Solo-Repository **nicht vorschnell eine zwingende fremde Approval-Anforderung aktivieren**, wenn kein zweiter Reviewer verfügbar ist. Sonst kann sich der Repository-Eigentümer selbst blockieren.
-
-Wenn später ein zweiter Maintainer vorhanden ist:
-
-- mindestens 1 Approval erwägen
-- CODEOWNERS-Review für kritische Bereiche erwägen
-- alte Approvals bei neuen Commits verwerfen
-
-### CP1 noch nicht global Required
-
-`cp1-runtime` erst dann als verpflichtendes Runtime-Gate verwenden, wenn:
-
-- der Self-hosted Runner dauerhaft erreichbar ist,
-- UE 5.8 sauber erkannt wird,
-- Readiness mehrfach stabil PASS war,
-- reine Doku-/Headless-PRs nicht unnötig blockiert werden.
+Testdateien dürfen den Validator testen. Sie können aber keinen Live-Server-PASS erzeugen.
 
 ---
 
-## 3. SELF-HOSTED RUNNER ANLEGEN
+## 3. P0-RULESET-SOLL
+
+Name:
+
+```text
+BUNKER BEATS P0 main gate
+```
+
+Ziel:
+
+```text
+refs/heads/main
+```
+
+Enforcement:
+
+```text
+active
+```
+
+Verbindliche Regeln:
+
+- Pull Request vor Integration
+- keine fremde Approval-Pflicht im Solo-Repository (`required_approving_review_count=0`)
+- alte Reviews bei neuen Änderungen verwerfen
+- offene Review-Diskussionen müssen gelöst sein
+- `static-and-contract` required
+- `repository-quality` required
+- Branch vor Merge aktuell halten
+- Force-Push sperren (`non_fast_forward`)
+- Löschen von `main` sperren (`deletion`)
+- keine Bypass-Akteure
+
+`cp1-runtime` bleibt noch **nicht** global required, solange der echte UE-5.8-Runner nicht dauerhaft stabil verfügbar ist.
+
+Der vollständige Sollvertrag liegt zentral in:
+
+```text
+Scripts/github_p0_ruleset.py
+```
+
+Admin-Tool, Status-Tool, öffentlicher Verifier und Regressionstests benutzen denselben Contract.
+
+---
+
+## 4. SICHERER ADMIN-ABLAUF
+
+### Schritt 1 — nur diagnostizieren
+
+```bash
+python3 Scripts/github_p0_admin.py --doctor
+```
+
+Ziel:
+
+```text
+GITHUB_ADMIN_PREFLIGHT: PASS
+```
+
+Geprüft werden unter anderem:
+
+- `gh` vorhanden
+- `gh` angemeldet
+- Repository exakt `provoware/bunkergame`
+- Repository nicht archiviert
+- `permissions.admin == true`
+- `main` vorhanden
+- Ruleset-Lesepfad erreichbar
+- keine doppelten gleichnamigen P0-Rulesets
+
+### Schritt 2 — empfohlenes Ruleset anwenden
+
+```bash
+python3 Scripts/github_p0_admin.py --apply-ruleset
+```
+
+Das ist ein sicheres Upsert:
+
+```text
+0 Rulesets mit Sollname → neu anlegen
+1 Ruleset mit Sollname  → aktualisieren
+>1 Rulesets             → BLOCKED, keine automatische Änderung
+```
+
+Nach dem Schreiben liest das Tool das Ruleset erneut von GitHub und validiert es mit demselben Contract.
+
+Ziel:
+
+```text
+GITHUB_P0_RULESET_GATE: PASS
+```
+
+### Klassische Alternative
+
+Nur falls Rulesets bewusst nicht verwendet werden sollen:
+
+```bash
+python3 Scripts/github_p0_admin.py --apply
+```
+
+Das setzt weiterhin die klassische Branch Protection.
+
+---
+
+## 5. UNABHÄNGIGER LIVE-BEWEIS — OHNE TOKEN
+
+Auf **jedem** Rechner mit Python und Internetzugang:
+
+```bash
+python3 Scripts/github_p0_public_verify.py
+```
+
+Das Skript verwendet nur Python-Standardbibliothek und öffentliche GitHub-REST-Endpunkte.
+
+Ziel:
+
+```text
+GITHUB_P0_PUBLIC_RULESET: PASS
+```
+
+PASS entsteht nur, wenn GitHub live ein Ruleset zurückliefert, das exakt den P0-Vertrag erfüllt.
+
+Folgende Zustände bleiben INCOMPLETE:
+
+- Ruleset fehlt
+- Ruleset heißt falsch
+- mehrere gleichnamige Rulesets
+- `enforcement=evaluate`
+- falscher Branchbereich
+- Bypass-Akteur vorhanden
+- Required Check fehlt oder zusätzlicher unerwarteter Check vorhanden
+- Strictness aus
+- Pull-Request-Regel unvollständig
+- Force-Push-Sperre fehlt
+- Delete-Sperre fehlt
+- unerwartete Zusatzregel vorhanden
+
+Damit kann eine lokale Testfixture keinen Live-PASS vortäuschen.
+
+---
+
+## 6. AUTOMATISCHER EXTERNER INFRASTRUKTUR-OBSERVER
+
+Workflow:
+
+```text
+.github/workflows/p0-infrastructure-observer.yml
+```
+
+Er läuft:
+
+- täglich geplant
+- manuell über `workflow_dispatch`
+- auf einem GitHub-hosted Runner
+- ohne Self-hosted Runner
+- ohne Admin-Secret
+- ohne GitHub-CLI-Anmeldung
+
+Jobname:
+
+```text
+p0-infrastructure-evidence
+```
+
+Bis das echte Ruleset aktiv ist, darf dieser Observer rot sein. Das ist kein Fehler der Testlogik, sondern wahrheitsgemäße Infrastruktur-Evidence.
+
+Nach erfolgreichem Ruleset-Apply wird der Observer zum zweiten, externen PASS-Beweis.
+
+---
+
+## 7. ERWEITERTER AUTHENTIFIZIERTER STATUS
+
+```bash
+python3 Scripts/github_p0_status.py
+```
+
+Dieser read-only Prüfer arbeitet Ruleset-first und fällt bei Bedarf auf klassische Branch Protection zurück.
+
+Zusätzlich versucht er zu lesen:
+
+- `UE58_RUNNER_ENABLED`
+- Self-hosted Runner mit `self-hosted`, `unreal`, `ue-5.8`
+
+Mögliche Evidence-Pfade:
+
+```text
+GITHUB_P0_EVIDENCE_PATH: RULESET
+GITHUB_P0_EVIDENCE_PATH: CLASSIC_PROTECTION
+GITHUB_P0_EVIDENCE_PATH: NONE
+```
+
+Bevorzugtes Ziel:
+
+```text
+GITHUB_P0_EVIDENCE_PATH: RULESET
+GITHUB_P0_BRANCH_GATE: PASS
+```
+
+---
+
+## 8. SELF-HOSTED UE-5.8 RUNNER
 
 GitHub:
 
 `Repository → Settings → Actions → Runners → New self-hosted runner`
 
-GitHub erzeugt dort **plattform- und versionsaktuelle Download-/Konfigurationsbefehle**. Diese Befehle verwenden; keine Runner-Version dauerhaft in dieser Projektdoku festschreiben.
+GitHubs aktuell erzeugte Setup-Befehle verwenden. Keine feste Runner-Version in die Projektdokumentation übernehmen.
 
-### Benutzerdefinierte Labels bei Erstkonfiguration
-
-Zusätzlich zu den automatischen Standardlabels:
+Zusätzliche Labels:
 
 ```text
 unreal
@@ -121,247 +279,117 @@ ue-5.8
 
 GitHub setzt `self-hosted` automatisch.
 
-Bei der Erstkonfiguration können mehrere Custom Labels übergeben werden, z. B.:
-
-```bash
-./config.sh --url <REPOSITORY_URL> --token <TEMPORARY_REGISTRATION_TOKEN> --labels unreal,ue-5.8
-```
-
-**Wichtig:** Den echten Registrierungs-Token niemals in Git, Logs, Markdown oder Screenshots speichern.
+Registrierungstoken niemals in Git, Issues, Markdown, Screenshots oder Logs speichern.
 
 ---
 
-## 4. RUNNER-MASCHINE VORBEREITEN
+## 9. RUNNER-READINESS
 
-Vor Aktivierung prüfen:
-
-- Unreal Engine 5.8 installiert
-- UE-Editor-Binary vorhanden
-- UE-Build-Skript vorhanden
-- C++-Toolchain installiert
-- Python verfügbar
-- Git verfügbar
-- ausreichend freier Speicher
-- Repository-Arbeitsordner beschreibbar
-- Runner kann GitHub erreichen
-
-### Empfohlene Umgebungsvariable
-
-Wenn UE nicht an einem automatisch erkannten Standardpfad liegt:
-
-```text
-UE58_ROOT=/pfad/zur/UE_5.8
-```
-
-Alternativ:
-
-```text
-UE58_EDITOR_CMD=/voller/pfad/zu/UnrealEditor
-```
-
----
-
-## 5. AUTOMATISCHE READINESS-PRÜFUNG
-
-Der Runtime-Workflow führt vor dem eigentlichen UE-Test aus:
+Auf der echten UE-Maschine:
 
 ```bash
-python3 Scripts/runner_readiness.py
+python3 Scripts/p0_preflight.py --full
 ```
 
-Geprüft werden unter anderem:
+Die Readiness prüft unter anderem:
 
 - Projektdatei
 - Editor-Target
-- erkannter UE-5.8-Pfad
+- UE-Pfad
 - UnrealEditor
 - Build-Skript
-- echte Engine-Version aus `Engine/Build/Build.version`
-- `MajorVersion=5` und `MinorVersion=8`
+- echte Version aus `Engine/Build/Build.version`
+- exakt UE 5.8
 - Python
 - Schreibrechte
-- mindestens 5 GB freier Speicher
-- sauberer Git-Arbeitsstand vor Runtime
+- mindestens 5 GB frei
+- sauberer Git-Arbeitsstand
 
-Ausgabe:
+Evidence:
 
 ```text
 Diagnostics/Runtime/runner_readiness.json
 ```
 
-Die Evidence verwendet Schema v2 und enthält einen UTC-Zeitstempel. Für die Freigabe der Runner-Variable akzeptiert der Admin-Assistent nur eine **frische PASS-Evidence**, die höchstens 30 Minuten alt ist.
+Nur frische PASS-Evidence, maximal 30 Minuten alt, darf die Runner-Freigabe ermöglichen.
 
-> `RUNNER_READINESS: PASS` bedeutet nur: **Maschine bereit.** Es bedeutet ausdrücklich nicht `CP1 PASS`.
-
----
-
-## 6. RUNNER IN GITHUB PRÜFEN
-
-GitHub:
-
-`Settings → Actions → Runners`
-
-Der Runner soll anzeigen:
-
-```text
-Status: Idle
-Labels: self-hosted, ..., unreal, ue-5.8
-```
-
-Mögliche Zustände:
-
-- `Idle` = verbunden und bereit
-- `Active` = arbeitet
-- `Offline` = nicht verbunden / Runner-Dienst läuft nicht / Netzwerkproblem
+`RUNNER_READINESS: PASS` beweist nur Maschinenbereitschaft.
 
 ---
 
-## 7. ERST JETZT RUNTIME AKTIVIEREN
+## 10. RUNNER-VARIABLE FREIGEBEN
 
-Repository-Variable setzen:
-
-`Settings → Secrets and variables → Actions → Variables`
-
-Name:
-
-```text
-UE58_RUNNER_ENABLED
-```
-
-Wert:
-
-```text
-true
-```
-
-Bevorzugt nicht manuell setzen, sondern nach frischem Readiness-PASS über:
+Bevorzugt auf derselben UE-Maschine und direkt nach frischer Readiness:
 
 ```bash
-python3 Scripts/github_p0_admin.py --apply --enable-runner-variable
+python3 Scripts/github_p0_admin.py --apply-ruleset --enable-runner-variable
 ```
 
-Das Skript validiert unmittelbar vorher die lokale Readiness-Evidence. Fehlende, alte, falsche oder nicht exakt zu UE 5.8 gehörende Evidence blockiert die Freigabe.
+Das Ruleset wird idempotent erneut geprüft/aktualisiert; anschließend wird die lokale Readiness-Evidence nochmals validiert. Nur dann wird gesetzt:
+
+```text
+UE58_RUNNER_ENABLED=true
+```
 
 ---
 
-## 8. ERSTER ECHTER CP1-LAUF
+## 11. ERSTER ECHTER CP1-LAUF
 
 Workflow:
 
-`Actions → CP1 UE 5.8 Runtime → Run workflow`
+```text
+CP1 UE 5.8 Runtime
+```
 
-Erwartete Reihenfolge:
+Beweiskette:
 
 ```text
-Checkout
-→ Runner Readiness
+Runner Readiness
 → Repository Preflight
 → UE 5.8 Build
 → Character Spawn
 → Movement
 → Telemetrie
 → CP1 Gate
-→ Artifact Upload
+→ Runtime Artifact
 ```
 
-### Artifact prüfen
-
-Mindestens:
-
-- Readiness-Report
-- Runtime-Evidence
-- CP1-Telemetrie, falls erzeugt
+Erst dieser Lauf darf CP1 GREEN machen.
 
 ---
 
-## 9. SICHERHEIT BEI ÖFFENTLICHEM REPOSITORY
+## 12. ABNAHME-CHECKLISTE
 
-Self-hosted Runner sind bei öffentlichen Repositories besonders sensibel, weil fremde Pull Requests potenziell Code einschleusen können.
-
-Der vorhandene Workflow verhindert deshalb den automatischen Runtime-Lauf für Fork-PRs.
-
-Zusätzlich:
-
-- keine persönlichen Dateien im Runner-Workspace
-- keine unnötigen Secrets auf der Maschine
-- minimale GitHub-Token-Rechte
-- Runner möglichst dediziert für dieses Projekt
-- Workspace regelmäßig bereinigen
-- keine dauerhaften Zugangstoken in Scripts
-
----
-
-## 10. ABNAHME-CHECKLISTE
-
-- [ ] `repository-quality` ist grün
-- [ ] `static-and-contract` ist grün
-- [ ] `python3 Scripts/p0_preflight.py` zeigt den erwarteten ersten Engpass
-- [ ] `main` Ruleset aktiv
+- [ ] `static-and-contract` PASS
+- [ ] `repository-quality` PASS
+- [ ] `GITHUB_ADMIN_PREFLIGHT: PASS`
+- [ ] genau ein P0-Ruleset mit Sollname vorhanden
+- [ ] Ruleset `active`
+- [ ] nur `main` erfasst
+- [ ] keine Bypass-Akteure
 - [ ] Pull Request erforderlich
+- [ ] Review-Diskussionen müssen gelöst sein
+- [ ] `static-and-contract` required
+- [ ] `repository-quality` required
+- [ ] Branch vor Merge aktuell
 - [ ] Force-Push gesperrt
 - [ ] Löschen von `main` gesperrt
-- [ ] beide Required Checks eingetragen
+- [ ] `GITHUB_P0_PUBLIC_RULESET: PASS`
+- [ ] Hosted `P0 Infrastructure Observer` PASS
 - [ ] Self-hosted Runner registriert
-- [ ] Labels `unreal` und `ue-5.8` vorhanden
-- [ ] Runner Status `Idle`
-- [ ] `python3 Scripts/p0_preflight.py --full` auf UE-Maschine ausgeführt
-- [ ] `runner_readiness.py` PASS
+- [ ] Labels `unreal`, `ue-5.8` vorhanden
+- [ ] Runner online/idle
+- [ ] `RUNNER_READINESS: PASS`
 - [ ] Readiness-Evidence höchstens 30 Minuten alt
-- [ ] `UE58_RUNNER_ENABLED=true` erst nach Evidence-Gate
-- [ ] erster CP1-Lauf ausgeführt
+- [ ] `UE58_RUNNER_ENABLED=true` erst danach
+- [ ] echter CP1-Lauf ausgeführt
 - [ ] Runtime-Evidence geprüft
-
----
-
-## 11. SICHERER ADMIN-ASSISTENT
-
-Damit die Branch-Protection nicht ausschließlich per Hand konfiguriert werden muss, gibt es zwei Hilfsskripte.
-
-### Nur Vorschau
-
-```bash
-python3 Scripts/github_p0_admin.py
-```
-
-Das Skript zeigt die geplante Konfiguration und ändert **nichts**.
-
-### Branch-Schutz anwenden
-
-```bash
-python3 Scripts/github_p0_admin.py --apply
-```
-
-Voraussetzungen:
-
-- GitHub CLI `gh` installiert
-- `gh auth login` abgeschlossen
-- verwendetes Konto besitzt Repository-Adminrechte
-
-Nach dem Schreiben liest das Skript die GitHub-Konfiguration erneut. Zielausgabe:
-
-```text
-GITHUB_P0_BRANCH_GATE: PASS
-```
-
-### Jederzeit read-only prüfen
-
-```bash
-python3 Scripts/github_p0_status.py
-```
-
-Dieser Prüfer verändert nichts und kontrolliert:
-
-- Branch-Protection auf `main`
-- Required Check `static-and-contract`
-- Required Check `repository-quality`
-- Status von `UE58_RUNNER_ENABLED`
-- passende Self-hosted Runner mit Labels `self-hosted`, `unreal`, `ue-5.8`
 
 ---
 
 ## Referenzen
 
+- GitHub Repository Rulesets: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository
+- GitHub REST Rulesets: https://docs.github.com/en/rest/repos/rules
 - GitHub Protected Branches: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
-- GitHub Self-hosted Runner hinzufügen: https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners
-- GitHub Runner Labels: https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/apply-labels
-- GitHub Runner Monitoring: https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/monitor-and-troubleshoot
+- GitHub Self-hosted Runner: https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners
