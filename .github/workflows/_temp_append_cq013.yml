@@ -1,0 +1,73 @@
+name: TEMP Append CQ-013
+on:
+  push:
+    branches: [fix/linux-click-start-executable]
+permissions:
+  contents: write
+jobs:
+  append-cq:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/linux-click-start-executable
+          fetch-depth: 0
+      - name: Append CQ-013 if missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('CODEQUALITÄT.md')
+          t=p.read_text(encoding='utf-8')
+          if 'CQ-2026-08-27-013' in t:
+              raise SystemExit(0)
+          e=r'''
+
+          ---
+
+          ## CQ-2026-08-27-013 — Dateirechte als testbaren Bestandteil des Portable-Release-Vertrags behandeln
+
+          **Iteration:** Linux Click-&-Start Executable Mode  
+          **Kategorie:** Portabilität / Release Integrity / Linux  
+          **Priorität:** P0  
+          **Status:** 🟢 IMPLEMENTIERT — Hosted-/Release-Abnahme noch offen  
+          **Aufwand:** 2/10  
+          **Risiko:** 1/10
+
+          ### Verbesserungsvorschlag
+
+          Unix-Dateimodi dürfen bei portablen Startskripten nicht als nebensächliche Metadaten behandelt werden. Zentrale `.sh`-Einstiege werden als `100755` versioniert und der Package-Integrity-Test prüft die Execute-Bits automatisch.
+
+          ### Grund
+
+          Der Release-Smoke nach dem Environment-Doctor-Fix zeigte, dass `START_BUNKER_BEATS_INTELLIGENT.sh` und `START_BUNKER_BEATS_ALL.sh` zwar per `bash datei.sh` funktionierten, aber nicht als echte Klick-&-Start-Dateien ausgeliefert wurden. Eine nachträgliche Paketkorrektur mit `chmod` würde außerdem den Release-Inhalt von der tatsächlichen `main`-Basis entkoppeln.
+
+          ### Wirkung
+
+          - Git-Checkout und Release-ZIP erhalten dieselben ausführbaren Einstiegspunkte
+          - kein manuelles `chmod +x` für Laien erforderlich
+          - Start-/Smoke-/CP1-Shellpfade werden konsistent
+          - Dateimodus-Regressionen brechen die bestehende CI frühzeitig
+          - Paketierung bleibt reproduzierbar und muss keine Rechte erfinden
+
+          ### Technischer Effekt
+
+          `Tests/test_cp1_package_integrity.py` prüft für `START_BUNKER_BEATS_INTELLIGENT.sh`, `START_BUNKER_BEATS_ALL.sh`, `RUN_CP1_UE58_ALL.sh` und `Build/Scripts/run_cp1_smoke.sh` Existenz und Unix-Execute-Bits. Die entsprechenden Git-Tree-Einträge werden auf `100755` gesetzt.
+
+          ### Erwarteter Nutzen
+
+          **Portabilität:** sehr hoch  
+          **Laienfreundlichkeit:** sehr hoch  
+          **Release-Integrität:** sehr hoch  
+          **Regressionserkennung:** hoch  
+          **Gameplay-Risiko:** keines
+          '''
+          p.write_text(t.rstrip()+e+'\n',encoding='utf-8')
+          PY
+          if git diff --quiet -- CODEQUALITÄT.md; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CODEQUALITÄT.md
+          git commit -m 'chore: append CQ-013 journal entry'
+          git push origin HEAD:refs/heads/fix/linux-click-start-executable
