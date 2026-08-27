@@ -41,6 +41,10 @@ Fehler werden anschließend eindeutig klassifiziert:
 sonst → unbekannter GitHub-Fehler
 ```
 
+### Grund
+
+Eine erfolgreiche GitHub-Anmeldung beweist nur die Identität, nicht die Administrationsfähigkeit für das konkrete Zielrepository. Ohne diese Trennung kann ein korrekt angemeldetes Konto mit nur Push- oder Maintain-Rechten wiederholt in denselben Branch-Protection-Fehler laufen. Gleichzeitig muss ein API-Fehler eindeutig genug klassifiziert sein, damit nicht aus Unsicherheit Schutzregeln gelockert werden.
+
 ### Umgesetzt
 
 - `github_p0_admin.py --doctor` ergänzt.
@@ -79,6 +83,7 @@ GITHUB_ADMIN_PREFLIGHT
 - PR #1: gemergt
 - PR #3: gemergt
 - `main`: serverseitig zuletzt `protected=false`
+- verbundene GitHub-Identität: Repository-Rolle `admin=true` bestätigt
 - Admin-Diagnose: implementiert
 - neue Regressionstests: implementiert
 - reale Admin-Ausführung: extern offen
@@ -96,4 +101,4 @@ GITHUB_ADMIN_PREFLIGHT
 
 ### Detailanleitung
 
-Siehe `Docs/GITHUB_P0_SETUP.md` und Issue #2.
+Siehe `Docs/GITHUB_ADMIN_DIAGNOSE.md`, `Docs/GITHUB_P0_SETUP.md` und Issue #2.
