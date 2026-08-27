@@ -5,7 +5,9 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/PlatformFileManager.h"
 #include "HAL/PlatformTime.h"
+#include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Parse.h"
 #include "Misc/Paths.h"
 
 namespace BunkerBeatsCP1
@@ -20,6 +22,7 @@ static FString VectorJson(const FVector& Value)
 }
 
 static void WriteTelemetry(
+    const FString& RunId,
     const FVector& Before,
     const FVector& After,
     const FVector& Velocity,
@@ -41,7 +44,8 @@ static void WriteTelemetry(
 
     const FString Payload = FString::Printf(
         TEXT("{\n")
-        TEXT("  \"schema\": \"bunkerbeats.cp1.movement.telemetry.v2\",\n")
+        TEXT("  \"schema\": \"bunkerbeats.cp1.movement.telemetry.v3\",\n")
+        TEXT("  \"run_id\": \"%s\",\n")
         TEXT("  \"frame_samples\": %d,\n")
         TEXT("  \"frame_time_ms_avg\": %.6f,\n")
         TEXT("  \"frame_time_ms_min\": %.6f,\n")
@@ -62,6 +66,7 @@ static void WriteTelemetry(
         TEXT("    \"run_physics_without_controller\": %s\n")
         TEXT("  }\n")
         TEXT("}\n"),
+        *RunId,
         FrameSamples,
         FrameMsAverage,
         FrameMsMin,
@@ -91,11 +96,13 @@ public:
         FAutomationTestBase& InTest,
         TSharedRef<FTestWorldWrapper> InTestWorld,
         TWeakObjectPtr<ABunkerBeatsCP1MovementSmokeCharacter> InCharacter,
-        const FVector& InBefore)
+        const FVector& InBefore,
+        const FString& InRunId)
         : Test(InTest)
         , TestWorld(MoveTemp(InTestWorld))
         , Character(InCharacter)
         , Before(InBefore)
+        , RunId(InRunId)
         , StartedSeconds(FPlatformTime::Seconds())
         , LastUpdateSeconds(StartedSeconds)
     {
@@ -146,6 +153,7 @@ public:
             const double WallAverageMs = WallFrameSamples > 0 ? WallFrameMsSum / static_cast<double>(WallFrameSamples) : 0.0;
 
             BunkerBeatsCP1::WriteTelemetry(
+                RunId,
                 Before,
                 After,
                 Velocity,
@@ -158,7 +166,8 @@ public:
                 Movement);
 
             Test.AddInfo(FString::Printf(
-                TEXT("CP1 CharacterSpawnMovement PASS: displacement=%.3fcm speed=%.3fcm/s frames=%d avg_sim_frame=%.3fms component=%s."),
+                TEXT("CP1 CharacterSpawnMovement PASS: run_id=%s displacement=%.3fcm speed=%.3fcm/s frames=%d avg_sim_frame=%.3fms component=%s."),
+                *RunId,
                 Distance,
                 Velocity.Size(),
                 FrameSamples,
@@ -203,6 +212,7 @@ private:
     TSharedRef<FTestWorldWrapper> TestWorld;
     TWeakObjectPtr<ABunkerBeatsCP1MovementSmokeCharacter> Character;
     FVector Before;
+    FString RunId;
     double StartedSeconds = 0.0;
     double LastUpdateSeconds = 0.0;
     int32 FrameSamples = 0;
@@ -222,6 +232,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FBunkerBeatsCP1MovementSmokeTest::RunTest(const FString& Parameters)
 {
+    FString EvidenceRunId;
+    if (!FParse::Value(FCommandLine::Get(), TEXT("CP1EvidenceRunId="), EvidenceRunId) || EvidenceRunId.IsEmpty())
+    {
+        AddError(TEXT("CP1 evidence binding failed: required -CP1EvidenceRunId=<run-id> is missing."));
+        return false;
+    }
+
     TSharedRef<FTestWorldWrapper> TestWorld = MakeShared<FTestWorldWrapper>();
     if (!TestWorld->CreateTestWorld(EWorldType::Game))
     {
@@ -278,10 +295,11 @@ bool FBunkerBeatsCP1MovementSmokeTest::RunTest(const FString& Parameters)
     const FVector Before = Character->GetActorLocation();
     Character->AddMovementInput(FVector::ForwardVector, 1.0f);
 
-    ADD_LATENT_AUTOMATION_COMMAND(FBunkerBeatsCP1MovementWait(*this, TestWorld, Character, Before));
+    ADD_LATENT_AUTOMATION_COMMAND(FBunkerBeatsCP1MovementWait(*this, TestWorld, Character, Before, EvidenceRunId));
 
     AddInfo(FString::Printf(
-        TEXT("CP1 CharacterSpawnMovement START: temp_game_world=true position=%s component=%s active=true max_walk_speed=%.1f."),
+        TEXT("CP1 CharacterSpawnMovement START: run_id=%s temp_game_world=true position=%s component=%s active=true max_walk_speed=%.1f."),
+        *EvidenceRunId,
         *Before.ToCompactString(),
         *Movement->GetClass()->GetName(),
         Movement->MaxWalkSpeed));
