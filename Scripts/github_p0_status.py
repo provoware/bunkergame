@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Read-only GitHub P0 status verifier for BUNKER BEATS.
 
-Uses the authenticated GitHub CLI but never changes repository state.
+Ruleset-first: repository rulesets are independently readable with repository
+read access. Classic Branch Protection remains a fallback path.
 """
 
 from __future__ import annotations
@@ -12,9 +13,15 @@ import shutil
 import subprocess
 import sys
 
-REPO = "provoware/bunkergame"
-BRANCH = "main"
-REQUIRED_CHECKS = ["static-and-contract", "repository-quality"]
+from github_p0_ruleset import (
+    BRANCH,
+    REPO,
+    REQUIRED_CHECKS,
+    RULESET_NAME,
+    evaluate_ruleset,
+    find_named_ruleset,
+)
+
 HTTP_STATUS_RE = re.compile(r"(?:HTTP\s*)?(403|404|422)\b", re.IGNORECASE)
 
 
@@ -67,6 +74,51 @@ def evaluate_protection(protection: dict) -> tuple[bool, set[str]]:
     return ok, checks
 
 
+def evaluate_ruleset_live() -> tuple[bool, str]:
+    code, items, error = gh_json(f"repos/{REPO}/rulesets")
+    if code != 0 or not isinstance(items, list):
+        return False, f"Ruleset-Liste nicht lesbar — {error}"
+
+    matches = [item for item in items if isinstance(item, dict) and item.get("name") == RULESET_NAME]
+    if len(matches) > 1:
+        return False, "mehrere gleichnamige P0-Rulesets vorhanden"
+
+    summary = find_named_ruleset(items)
+    if not isinstance(summary, dict):
+        return False, "P0-Ruleset nicht vorhanden"
+    ruleset_id = summary.get("id")
+    if not isinstance(ruleset_id, int):
+        return False, "P0-Ruleset hat keine gültige ID"
+
+    code, detail, error = gh_json(f"repos/{REPO}/rulesets/{ruleset_id}")
+    if code != 0 or not isinstance(detail, dict):
+        return False, f"P0-Ruleset-Detail nicht lesbar — {error}"
+
+    ok, failures = evaluate_ruleset(detail)
+    if ok:
+        return True, f"Ruleset {ruleset_id} erfüllt den vollständigen P0-Vertrag"
+    return False, "; ".join(failures)
+
+
+def evaluate_classic_branch_protection() -> tuple[bool, str]:
+    code, branch, error = gh_json(f"repos/{REPO}/branches/{BRANCH}")
+    if code != 0 or not isinstance(branch, dict):
+        return False, f"Branch-Metadaten nicht lesbar — {error}"
+    if not branch_protected_hint(branch):
+        return False, f"GitHub-Server meldet {BRANCH}.protected=false"
+
+    code, protection, error = gh_json(f"repos/{REPO}/branches/{BRANCH}/protection")
+    if code != 0 or not isinstance(protection, dict):
+        category = classify_read_error(error)
+        return False, f"Protection aktiv, Details nicht beweisbar — {category}: {error}"
+
+    ok, checks = evaluate_protection(protection)
+    if not ok:
+        missing = [required for required in REQUIRED_CHECKS if required not in checks]
+        return False, "Classic Protection unvollständig" + (f"; fehlend: {', '.join(missing)}" if missing else "")
+    return True, "klassische Branch Protection erfüllt den P0-Vertrag"
+
+
 def main() -> int:
     print("=== BUNKER BEATS P0 STATUS ===")
     if shutil.which("gh") is None:
@@ -78,38 +130,24 @@ def main() -> int:
         return 3
 
     branch_gate_ok = False
+    evidence_path = "NONE"
 
-    code, branch, error = gh_json(f"repos/{REPO}/branches/{BRANCH}")
-    if code != 0 or not isinstance(branch, dict):
-        print(f"[BLOCKED] Branch-Metadaten nicht lesbar — {error}")
-    elif not branch_protected_hint(branch):
-        print(f"[FAIL] {BRANCH} Branch Gate — GitHub-Server meldet protected=false")
-        print("  - Required Checks: noch nicht serverseitig beweisbar")
-        print("  - Nächster Schritt: python3 Scripts/github_p0_admin.py --doctor")
+    ruleset_ok, ruleset_detail = evaluate_ruleset_live()
+    if ruleset_ok:
+        branch_gate_ok = True
+        evidence_path = "RULESET"
+        print(f"[PASS] P0 Ruleset — {ruleset_detail}")
     else:
-        print(f"[PASS] GitHub-Server meldet {BRANCH}.protected=true")
-        code, protection, error = gh_json(f"repos/{REPO}/branches/{BRANCH}/protection")
-        if code != 0 or not isinstance(protection, dict):
-            category = classify_read_error(error)
-            print(f"[BLOCKED] Protection ist aktiv, Details aber nicht beweisbar — {category}")
-            print(f"  - GitHub: {error}")
-            print("  - Nächster Schritt: Anmeldung/Token-Rechte für Repository Administration prüfen")
+        print(f"[WAIT] P0 Ruleset — {ruleset_detail}")
+        classic_ok, classic_detail = evaluate_classic_branch_protection()
+        if classic_ok:
+            branch_gate_ok = True
+            evidence_path = "CLASSIC_PROTECTION"
+            print(f"[PASS] Classic Branch Protection — {classic_detail}")
         else:
-            branch_gate_ok, checks = evaluate_protection(protection)
-            print(f"[{'PASS' if branch_gate_ok else 'FAIL'}] main Branch Gate Detailprüfung")
-            for required in REQUIRED_CHECKS:
-                print(f"  - {required}: {'PASS' if required in checks else 'FAIL'}")
-
-            strict = protection.get("required_status_checks", {}).get("strict", False)
-            admins = protection.get("enforce_admins", {}).get("enabled", False)
-            pr_gate = bool(protection.get("required_pull_request_reviews"))
-            force = protection.get("allow_force_pushes", {}).get("enabled", False)
-            delete = protection.get("allow_deletions", {}).get("enabled", False)
-            print(f"  - Pull Request erforderlich: {'PASS' if pr_gate else 'FAIL'}")
-            print(f"  - Branch aktuell vor Merge: {'PASS' if strict else 'FAIL'}")
-            print(f"  - Admins geschützt: {'PASS' if admins else 'FAIL'}")
-            print(f"  - Force-Push gesperrt: {'PASS' if not force else 'FAIL'}")
-            print(f"  - Branch-Löschen gesperrt: {'PASS' if not delete else 'FAIL'}")
+            print(f"[FAIL] main Branch Gate — {classic_detail}")
+            print("  - Nächster Schritt: python3 Scripts/github_p0_admin.py --doctor")
+            print("  - Empfohlen danach: python3 Scripts/github_p0_admin.py --apply-ruleset")
 
     runner_known = False
     runner_ready = False
@@ -137,7 +175,8 @@ def main() -> int:
         runner_ready = bool(online)
         print(f"[{'PASS' if online else 'WAIT'}] UE-5.8 Runner: {len(online)} online / {len(matching)} passend")
 
-    print("\nHinweis: Ein online Runner beweist noch kein CP1. Danach `Scripts/runner_readiness.py` und den echten CP1-Workflow ausführen.")
+    print("\nHinweis: Ruleset-/Branch-Gate-PASS beweist nur den GitHub-Schutz. Ein online Runner beweist noch kein CP1.")
+    print(f"GITHUB_P0_EVIDENCE_PATH: {evidence_path}")
     print(f"GITHUB_P0_BRANCH_GATE: {'PASS' if branch_gate_ok else 'INCOMPLETE'}")
     if runner_known:
         print(f"GITHUB_P0_RUNNER_STATE: {'ONLINE' if runner_ready else 'WAIT'}")
