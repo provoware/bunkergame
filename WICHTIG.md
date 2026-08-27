@@ -2,87 +2,99 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-002 — GitHub-P0-Adminschritte fehlersicher und nachprüfbar machen
+## W-2026-08-27-003 — Runner-Freigabe nur mit frischer, exakt verifizierter UE-5.8-Evidence
 
-**Kategorie:** Schwachstelle / Bedienung / GitHub-Administration  
+**Kategorie:** Schwachstelle / Evidence / Self-hosted Runner / GitHub-Sicherheit  
 **Priorität:** P0  
-**Status:** 🟡 VORBEREITET — externe Adminausführung erforderlich  
+**Status:** 🟢 TECHNISCH GEHÄRTET — reale UE-Maschine weiterhin extern erforderlich  
 **Nutzen:** 10/10  
-**Aufwand:** 3/10  
+**Aufwand:** 4/10  
 **Risiko der Umsetzung:** 2/10
 
 ### Beobachtung
 
-`main` ist weiterhin ungeschützt und im Repository existiert noch kein Ruleset. Die GitHub-Verbindung dieser Entwicklungsumgebung kann Rulesets und Branch-Protection lesen, stellt aber keine Admin-Schreibaktion dafür bereit. Eine rein manuelle Einrichtung in der Weboberfläche ist möglich, aber anfällig für falsche Check-Namen, versehentlich aktivierte Runtime-Gates oder fehlende Nachkontrolle.
+Der bisherige GitHub-P0-Assistent konnte `UE58_RUNNER_ENABLED=true` über einen expliziten Schalter setzen, obwohl nur ein Warnhinweis verlangte, vorher `RUNNER_READINESS: PASS` zu erzeugen. Außerdem erkannte `runner_readiness.py` zwar typische `UE_5.8`-Pfade, prüfte aber die tatsächliche Engine-Version aus `Engine/Build/Build.version` noch nicht und erzeugte keinen Freshness-Zeitstempel.
+
+Damit bestand ein möglicher Bypass zwischen **Maschine sieht passend aus** und **Maschine ist frisch und exakt als UE 5.8 geprüft**.
 
 ### Verbesserungsvorschlag
 
-Die GitHub-P0-Einrichtung als **sicheren, lokalen Admin-Assistenten** im Repository bereitstellen:
+Die Aktivierung der Repository-Variable wird an maschinell validierte Evidence gebunden:
 
-- `Scripts/github_p0_admin.py` zeigt standardmäßig nur den geplanten Zustand an.
-- Erst `--apply` darf Branch-Protection tatsächlich setzen.
-- `static-and-contract` und `repository-quality` werden als Required Checks gesetzt.
-- `cp1-runtime` bleibt bewusst noch nicht global required.
-- Admins unterliegen dem Schutz.
-- Force-Push und Branch-Löschen werden gesperrt.
-- Nach dem Schreiben wird der GitHub-Zustand erneut gelesen und geprüft.
-- `Scripts/github_p0_status.py` kann jederzeit ausschließlich lesend den P0-Zustand prüfen.
-- `UE58_RUNNER_ENABLED=true` wird nicht automatisch zusammen mit Branch-Protection gesetzt; dafür ist ein eigener expliziter Schalter vorgesehen und darf erst nach realem `RUNNER_READINESS: PASS` verwendet werden.
+```text
+runner_readiness.py
+→ Build.version lesen
+→ exakt UE 5.8 bestätigen
+→ alle Readiness-Checks PASS
+→ UTC-Zeitstempel schreiben
+→ Evidence höchstens 30 Minuten alt
+→ github_p0_admin.py validiert Evidence erneut
+→ erst dann UE58_RUNNER_ENABLED=true
+```
+
+### Umgesetzt
+
+- `runner_readiness.json` verwendet Schema v2.
+- `generated_at_utc` wird gespeichert.
+- `Engine/Build/Build.version` wird gelesen.
+- `MajorVersion == 5` und `MinorVersion == 8` sind zwingend.
+- `engine_version_exact_5_8` ist ein Required Readiness Check.
+- `github_p0_admin.py` akzeptiert nur Schema v2 und den korrekten Evidence-Typ.
+- Status muss `PASS` sein.
+- alle Readiness-Checks müssen `true` sein.
+- Runtime-/CP1-Claims innerhalb der Readiness-Evidence werden als unzulässig blockiert.
+- Evidence älter als 30 Minuten wird blockiert.
+- deutlich in der Zukunft liegende Evidence wird blockiert.
+- Regressionstests liegen unter `Scripts/tests/test_p0_control_plane.py`.
+- `Quality Guard` führt diese Tests automatisch aus.
 
 ### Grund
 
-Ein Schutzmechanismus ist nur dann belastbar, wenn nicht nur seine Konfiguration, sondern auch seine **erfolgreiche serverseitige Wirkung** nachgeprüft wird. Gleichzeitig darf ein Hilfsskript keine weitreichende Adminänderung unbemerkt durchführen.
+Eine sicherheitsrelevante Freigabe darf nicht auf Erinnerung oder Bedienhinweis vertrauen. Der Übergang selbst muss die Evidence prüfen. Besonders bei Self-hosted Runnern kann veraltete oder falsch zugeordnete Readiness sonst einen Workflow auf einer inzwischen veränderten Maschine freischalten.
 
 ### Erwartete Wirkung
 
-- weniger Fehlkonfigurationen bei Branch-Protection
-- korrekte Required-Check-Namen
-- reproduzierbare Einrichtung
-- klarer Dry-Run vor jeder Änderung
-- serverseitige Nachprüfung nach dem Schreiben
-- Runner-Freigabe bleibt vom Branch-Schutz getrennt
-- deutlich bessere Bedienbarkeit für Nicht-GitHub-Spezialisten
+- kein versehentliches Aktivieren ohne aktuelle Readiness
+- keine Freigabe für UE 5.7, UE 5.9 oder nur passend benannte Verzeichnisse
+- weniger Stale-Evidence-Risiko
+- klarere Trennung von Maschinenbereitschaft und Runtime-Erfolg
+- Regressionen der Freigabelogik werden in Hosted CI erkannt
 
 ### Technischer Effekt
 
-Der bisher rein manuelle P0-Adminschritt wird zu einem kontrollierten Ablauf:
+Die Freigabe wird zu einer echten Evidence-State-Machine:
 
 ```text
-Dry-Run
-→ gh-Authentifizierung prüfen
-→ Branch-Protection setzen
-→ GitHub erneut lesen
-→ Required Checks verifizieren
-→ PASS/FAIL ausgeben
-```
+NO EVIDENCE / FAIL / STALE / WRONG UE
+→ BLOCKED
 
-Die UE-Runner-Freigabe bleibt ein separates Gate:
+FRESH UE58_RUNNER_READINESS PASS
+→ Variable darf gesetzt werden
 
-```text
-Runner registrieren
-→ runner_readiness.py real PASS
-→ erst dann UE58_RUNNER_ENABLED=true
-→ echter CP1-Lauf
+VARIABLE ENABLED
+→ Runtime darf starten
+
+RUNTIME PASS
+→ erst dann CP1 GREEN
 ```
 
 ### Aktueller belegter Zustand
 
-- `static-and-contract`: PASS
-- `repository-quality`: PASS
-- GitHub-Rulesets: keine vorhanden
-- `main` Branch-Protection: noch offen
-- UE-5.8 Self-hosted Runner: noch extern einzurichten
+- Hosted `Validate`: PASS
+- Hosted `Quality Guard`: PASS auf dem vorherigen abgenommenen Head
+- Branch-Protection auf `main`: weiterhin extern offen
+- Self-hosted UE-5.8 Runner: weiterhin extern offen
+- reale Readiness-Evidence: noch nicht vorhanden
 - CP1 Runtime: weiterhin `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
-- `python3 Scripts/github_p0_admin.py --apply` auf einem mit Adminrechten angemeldeten Rechner erfolgreich ausgeführt wurde
-- `python3 Scripts/github_p0_status.py` den Branch-Gate als PASS meldet
-- GitHub `main` als geschützt ausweist
-- `static-and-contract` required ist
-- `repository-quality` required ist
-- Force-Push und Löschen blockiert sind
-- UE-Runner anschließend separat registriert und real geprüft wird
+- neue P0-Regressionstests auf GitHub PASS sind
+- `main` Branch Gate real PASS ist
+- Self-hosted Runner registriert ist
+- `runner_readiness.py` auf dieser Maschine frisch PASS erzeugt
+- `github_p0_admin.py --apply --enable-runner-variable` diese Evidence akzeptiert
+- danach der echte CP1-Workflow läuft
 
 ### Detailanleitung
 
