@@ -282,6 +282,76 @@ Zusätzlich:
 
 ---
 
+## 11. NEU — SICHERER ADMIN-ASSISTENT
+
+Damit die Branch-Protection nicht ausschließlich per Hand konfiguriert werden muss, gibt es zwei Hilfsskripte.
+
+### Nur Vorschau
+
+```bash
+python3 Scripts/github_p0_admin.py
+```
+
+Das Skript zeigt die geplante Konfiguration und ändert **nichts**.
+
+### Branch-Schutz anwenden
+
+```bash
+python3 Scripts/github_p0_admin.py --apply
+```
+
+Voraussetzungen:
+
+- GitHub CLI `gh` installiert
+- `gh auth login` abgeschlossen
+- verwendetes Konto besitzt Repository-Adminrechte
+
+Nach dem Schreiben liest das Skript die GitHub-Konfiguration erneut. Zielausgabe:
+
+```text
+GITHUB_P0_BRANCH_GATE: PASS
+```
+
+### Jederzeit read-only prüfen
+
+```bash
+python3 Scripts/github_p0_status.py
+```
+
+Dieser Prüfer verändert nichts und kontrolliert:
+
+- Branch-Protection auf `main`
+- Required Check `static-and-contract`
+- Required Check `repository-quality`
+- Status von `UE58_RUNNER_ENABLED`
+- passende Self-hosted Runner mit Labels `self-hosted`, `unreal`, `ue-5.8`
+
+### Runner-Variable bewusst getrennt
+
+`UE58_RUNNER_ENABLED=true` wird nicht automatisch mit Branch-Protection gesetzt.
+
+Erst nach echtem:
+
+```text
+RUNNER_READINESS: PASS
+```
+
+darf entweder ausgeführt werden:
+
+```bash
+gh variable set UE58_RUNNER_ENABLED --repo provoware/bunkergame --body true
+```
+
+oder explizit:
+
+```bash
+python3 Scripts/github_p0_admin.py --apply --enable-runner-variable
+```
+
+> Der zweite Schalter ist bewusst gefährlicher und darf nicht vor realem Runner-Readiness-PASS verwendet werden.
+
+---
+
 ## Referenzen
 
 - GitHub Protected Branches: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
