@@ -250,3 +250,51 @@ Die Entscheidungslogik ist in `Scripts/tests/test_p0_control_plane.py` abgesiche
 **Fehlbedienungsschutz:** hoch  
 **Wartbarkeit:** hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-005 — Branch-Lifecycle-Guard nach abgeschlossenem PR
+
+**Iteration:** Post-Merge Workflow Hardening  
+**Kategorie:** Git-Workflow / Prozessintegrität / Regression Prevention  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT  
+**Aufwand:** 2/10  
+**Risiko:** 1/10
+
+### Verbesserungsvorschlag
+
+Vor allen fachlichen Prüfungen sicherstellen, dass der aktuelle Arbeitsbranch nicht bereits über einen abgeschlossenen Pull Request gemergt wurde und anschließend neue Commits erhalten hat.
+
+### Grund
+
+Ein gemergter PR beendet seinen Review- und CI-Lifecycle. Werden danach auf demselben Feature-Branch weitere Commits erzeugt, gehören diese nicht mehr zum abgeschlossenen PR. Ohne neue Branch-/PR-Grenze kann dadurch der Eindruck entstehen, die Folgearbeit sei weiterhin Teil des bereits geprüften Änderungssatzes.
+
+### Wirkung
+
+- Folgearbeit erhält einen neuen Review-Lifecycle
+- gemergte und noch offene Arbeit werden nicht vermischt
+- bessere Nachvollziehbarkeit von CI-Evidence
+- weniger Risiko für unbemerkte Nacharbeiten außerhalb eines PRs
+- klarere Branch-Hygiene für Menschen und Agenten
+
+### Technischer Effekt
+
+`Scripts/branch_lifecycle_guard.py` prüft read-only:
+
+```text
+aktueller Feature-Branch
+→ gemergte PRs mit demselben Head-Branch?
+→ Commits vor origin/main?
+→ merged + ahead > 0 = FAIL
+```
+
+Der Guard ist die erste Stufe von `Scripts/p0_preflight.py`. Die reine Entscheidungslogik wird in `Scripts/tests/test_p0_control_plane.py` regressionsgetestet.
+
+### Erwarteter Nutzen
+
+**Prozessintegrität:** sehr hoch  
+**Review-Nachvollziehbarkeit:** sehr hoch  
+**Fehlbedienungsschutz:** hoch  
+**CI-Evidence-Zuordnung:** hoch  
+**Gameplay-Risiko:** keines
