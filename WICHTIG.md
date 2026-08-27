@@ -20,15 +20,15 @@ Der Branch `main` ist aktuell nicht geschützt. Dadurch können Änderungen theo
 Nach erfolgreicher Einführung des `Quality Guard` einen Branch-Protection-Ruleset für `main` aktivieren:
 
 - Pull Request vor Merge verpflichtend
-- `Validate` als Required Check
-- `Quality Guard` als Required Check
+- Check `static-and-contract` verpflichtend — Workflow `Validate`
+- Check `repository-quality` verpflichtend — Workflow `Quality Guard`
 - Branch vor Merge aktuell halten
 - Force-Push sperren
 - Löschen von `main` sperren
 - direkte Pushes auf `main` vermeiden
 - Squash Merge bevorzugen
 
-`CP1 UE 5.8 Runtime` **noch nicht pauschal als Required Check** konfigurieren, solange der Self-hosted UE-Runner nicht dauerhaft verfügbar ist. Sonst könnten reine Doku-/Headless-Änderungen unnötig blockiert werden. Sobald der Runner stabil betrieben wird, wird ein pfad-/scope-gerechtes Runtime-Gate ergänzt.
+`cp1-runtime` **noch nicht pauschal als Required Check** konfigurieren, solange der Self-hosted UE-Runner nicht dauerhaft verfügbar ist. Sonst könnten reine Doku-/Headless-Änderungen unnötig blockiert werden. Sobald der Runner stabil betrieben wird, wird ein pfad-/scope-gerechtes Runtime-Gate ergänzt.
 
 ### Grund
 
@@ -49,13 +49,17 @@ Die aktuelle technische Qualität kann sehr gut sein, aber ohne Schutz des Integ
 ### Abhängigkeiten
 
 1. `Quality Guard` muss im PR einmal erfolgreich laufen.
-2. Name der stabilen Required Checks muss feststehen.
+2. Check-Namen sind bestätigt: `static-and-contract` und `repository-quality`.
 3. Self-hosted Runner wird separat eingerichtet.
 
 ### Fertig, wenn
 
 - Branch-Schutz/Ruleset aktiv ist
-- `Validate` verpflichtend ist
-- `Quality Guard` verpflichtend ist
+- `static-and-contract` verpflichtend ist
+- `repository-quality` verpflichtend ist
 - Force-Push und Branch-Löschen blockiert sind
 - ein Test-PR den Schutz praktisch bestätigt
+
+### Detailanleitung
+
+Siehe `Docs/GITHUB_P0_SETUP.md`.
