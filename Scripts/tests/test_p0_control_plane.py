@@ -25,6 +25,7 @@ def load_module(name: str, path: Path):
 
 
 ruleset = load_module("github_p0_ruleset", ROOT / "Scripts" / "github_p0_ruleset.py")
+public = load_module("github_p0_public_verify", ROOT / "Scripts" / "github_p0_public_verify.py")
 admin = load_module("github_p0_admin", ROOT / "Scripts" / "github_p0_admin.py")
 status = load_module("github_p0_status", ROOT / "Scripts" / "github_p0_status.py")
 readiness = load_module("runner_readiness", ROOT / "Scripts" / "runner_readiness.py")
@@ -171,6 +172,51 @@ class RulesetContractTests(unittest.TestCase):
         self.assertIsNone(ruleset.find_named_ruleset([item, dict(item, id=2)]))
 
 
+class PublicRulesetVerifierTests(unittest.TestCase):
+    def setUp(self):
+        self.original_get = public.github_get
+
+    def tearDown(self):
+        public.github_get = self.original_get
+
+    def test_public_verifier_accepts_only_live_detail_that_matches_contract(self):
+        detail = json.loads(json.dumps(ruleset.ruleset_payload()))
+        detail["id"] = 42
+
+        def fake_get(path: str):
+            if path.endswith("/rulesets"):
+                return True, [{"id": 42, "name": ruleset.RULESET_NAME}], ""
+            if path.endswith("/rulesets/42"):
+                return True, detail, ""
+            return False, None, "unexpected endpoint"
+
+        public.github_get = fake_get
+        ok, message = public.verify_public_ruleset()
+        self.assertTrue(ok, message)
+        self.assertIn("42", message)
+
+    def test_public_verifier_rejects_missing_ruleset(self):
+        public.github_get = lambda path: (True, [], "")
+        ok, message = public.verify_public_ruleset()
+        self.assertFalse(ok)
+        self.assertIn("nicht vorhanden", message)
+
+    def test_public_verifier_rejects_evaluate_only_ruleset(self):
+        detail = json.loads(json.dumps(ruleset.ruleset_payload()))
+        detail["id"] = 42
+        detail["enforcement"] = "evaluate"
+
+        def fake_get(path: str):
+            if path.endswith("/rulesets"):
+                return True, [{"id": 42, "name": ruleset.RULESET_NAME}], ""
+            return True, detail, ""
+
+        public.github_get = fake_get
+        ok, message = public.verify_public_ruleset()
+        self.assertFalse(ok)
+        self.assertIn("active", message)
+
+
 class GitHubAdminDiagnosticTests(unittest.TestCase):
     def test_repo_admin_permission_is_accepted(self):
         ok, detail = admin.repo_admin_capability(
@@ -311,6 +357,10 @@ class PreflightDecisionTests(unittest.TestCase):
             self.result("github", 0),
         ]
 
+    def test_preflight_uses_token_free_ruleset_verifier(self):
+        github_step = next(step for step in preflight.BASE_STEPS if step.key == "github")
+        self.assertIn("github_p0_public_verify.py", github_step.command[-1])
+
     def test_branch_failure_has_highest_priority(self):
         results = self.baseline()
         results[0] = self.result("branch", 2)
@@ -326,12 +376,12 @@ class PreflightDecisionTests(unittest.TestCase):
         results[2] = self.result("quality", 1)
         self.assertIn("Quality Guard", preflight.next_action(results, False))
 
-    def test_github_failure_points_to_admin_doctor(self):
+    def test_github_failure_points_to_admin_doctor_and_ruleset(self):
         results = self.baseline()
         results[3] = self.result("github", 2)
         action = preflight.next_action(results, False)
         self.assertIn("github_p0_admin.py --doctor", action)
-        self.assertNotIn("github_p0_admin.py --apply", action)
+        self.assertIn("github_p0_admin.py --apply-ruleset", action)
 
     def test_hosted_pass_points_to_ue_machine(self):
         self.assertIn("--full", preflight.next_action(self.baseline(), False))
@@ -345,6 +395,7 @@ class PreflightDecisionTests(unittest.TestCase):
     def test_full_pass_points_to_guarded_activation(self):
         results = self.baseline() + [self.result("readiness", 0)]
         action = preflight.next_action(results, True)
+        self.assertIn("--apply-ruleset", action)
         self.assertIn("--enable-runner-variable", action)
         self.assertIn("CP1 UE 5.8 Runtime", action)
 
