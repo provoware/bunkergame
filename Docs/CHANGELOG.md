@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 2026-08-27 — P0 Independently Verifiable Ruleset Evidence
+
+### Added
+- `Scripts/github_p0_ruleset.py` als zentrale, fail-closed Vertragslogik für den GitHub-P0-Schutz.
+- `Scripts/github_p0_public_verify.py` als tokenfreier Live-Verifier direkt gegen die öffentliche GitHub-REST-API.
+- `.github/workflows/p0-infrastructure-observer.yml` als täglicher/manueller GitHub-hosted Infrastruktur-Observer ohne Self-hosted Runner und ohne Admin-Secret.
+- Regressionstests für Ruleset-Enforcement, Required Checks, Strictness, Bypass, Delete-/Force-Push-Sperren und öffentlichen Live-Verifier.
+
+### Changed
+- `github_p0_admin.py` unterstützt `--apply-ruleset` als sicheres Create-or-Update mit Duplikat-Sperre und serverseitigem Read-back.
+- `github_p0_status.py` arbeitet Ruleset-first und nutzt klassische Branch Protection nur noch als Fallback.
+- `p0_preflight.py` beweist den GitHub-Schutz über `github_p0_public_verify.py` ohne GitHub-Login oder Token.
+- Ruleset-Payload, Statusprüfung und Tests verwenden denselben zentralen Contract, um Soll-/Ist-Drift zu vermeiden.
+- `WICHTIG.md` auf W-2026-08-27-007 aktualisiert und `CODEQUALITÄT.md` append-only um CQ-2026-08-27-007 erweitert.
+
+### Evidence state
+- GitHub-Ruleset-Liste meldete vor dem realen Apply weiterhin `[]`; daher noch kein Infrastruktur-PASS.
+- `main` meldete zuletzt weiterhin `protected=false`; klassische Branch Protection bleibt nur Fallback.
+- code-seitige Ruleset-Evidence-Schicht ist implementiert; neuester PR-Head wird erneut über Hosted CI abgenommen.
+- Self-hosted UE-5.8 Runner weiterhin nicht real nachgewiesen.
+- CP1 Runtime weiterhin `UNOBSERVED/BLOCKED`; kein Runtime-PASS behauptet.
+
+---
+
 ## 2026-08-27 — P0 Admin Diagnostics
 
 ### Added
