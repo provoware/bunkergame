@@ -2,115 +2,124 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-008 — Infrastruktur-Evidence an Live-`main` und Ruleset-Drift binden
+## W-2026-08-27-009 — Runner-Readiness an Checkout und Maschine binden
 
-**Kategorie:** Evidence Integrity / Drift Detection / GitHub Infrastructure  
+**Kategorie:** Evidence Integrity / Self-hosted Runner / Kontextbindung  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT — reales Ruleset und damit echter PASS weiterhin offen  
+**Status:** 🟢 IMPLEMENTIERT — reale UE-5.8-Maschinen-Evidence weiterhin offen  
 **Nutzen:** 10/10  
 **Aufwand:** 4/10  
 **Risiko der Umsetzung:** 2/10
 
 ### Beobachtung
 
-Ein tokenfreier Live-Check beweist den aktuellen GitHub-Zustand sehr gut, hinterlässt aber ohne zusätzliche Struktur nur eine Konsolenausgabe. Für spätere Fehleranalyse, Release-Abnahme und automatische Drift-Erkennung fehlt damit ein maschinenlesbarer Beleg, der eindeutig sagt, **welcher `main`-Commit**, **welches Ruleset** und **welcher Vertragszustand** tatsächlich beobachtet wurden.
+Die bisherige Readiness-Evidence war frisch und prüfte UE 5.8 sowie mehrere Maschinen-Voraussetzungen, war aber noch nicht stark genug an **den konkreten Ausführungskontext** gebunden. Eine formal gültige und noch frische JSON-Datei hätte theoretisch aus einem anderen Checkout oder von einer anderen Maschine kopiert werden können. Außerdem verlangte die bisherige Admin-Prüfung zwar, dass alle vorhandenen Checks `true` sind, aber noch nicht den **exakt erwarteten vollständigen Check-Satz**.
 
-Eine gespeicherte JSON-Datei allein wäre wiederum zu schwach: Sie könnte veraltet sein, nachträglich verändert werden oder nach einem neuen `main`-Commit weiter wie gültige Evidence aussehen.
+Ein weiterer Randfall: Nach einem erfolgreichen Readiness-Lauf könnten lokale Dateien verändert werden, ohne dass sich der Git-Commit-SHA ändert. Eine reine HEAD-Bindung würde diese Veränderung nicht erkennen.
 
 ### Verbesserungsvorschlag
 
-Den öffentlichen Live-Beweis zu einer zweistufigen Evidence-Kette erweitern:
+Readiness-Evidence als kontextgebundene Freigabe behandeln:
 
 ```text
-LIVE GITHUB
-→ main SHA lesen
-→ Ruleset-ID + Detail lesen
-→ P0-Contract validieren
-→ JSON-Evidence erzeugen
-→ Integritäts-Hash bilden
+RUNNER READINESS
+→ Repository exakt provoware/bunkergame
+→ vollständiger Git-HEAD
+→ Worktree sauber
+→ pseudonymer Maschinenfingerprint
+→ exakt definierter Check-Satz
+→ UE exakt 5.8
+→ Evidence maximal 30 Minuten alt
+→ Schema v3
 
-GESPEICHERTE EVIDENCE
-→ Schema + Repository + Branch prüfen
-→ Freshness prüfen
-→ SHA-256-Integrität prüfen
-→ GitHub erneut live lesen
-→ main SHA muss noch identisch sein
-→ Ruleset-ID muss noch identisch sein
-→ Contract muss erneut PASS sein
-→ erst dann GITHUB_P0_EVIDENCE: PASS
+VOR UE58_RUNNER_ENABLED=true
+→ Repository erneut bestimmen
+→ Git-HEAD erneut bestimmen
+→ Maschinenfingerprint erneut bestimmen
+→ Worktree erneut auf sauber prüfen
+→ gespeicherte Evidence gegen genau diesen aktuellen Kontext prüfen
+→ erst dann GitHub-Variable setzen
 ```
 
 ### Grund
 
-Ein belastbarer Infrastrukturbeweis braucht sowohl **Nachvollziehbarkeit** als auch **Gegenwartsbezug**. Der gespeicherte Datensatz erklärt, was beobachtet wurde; die erneute Live-Abfrage verhindert, dass ein alter oder kopierter PASS als aktueller Serverzustand verwendet wird.
+Eine sicherheitsrelevante Evidence soll nicht nur sagen „irgendeine passende Maschine war vor kurzem bereit“, sondern „**dieser Checkout auf dieser Maschine in diesem Zustand** war bereit und ist vor der Freigabe noch derselbe“. Dadurch verliert kopierte, teilweise erzeugte oder nachträglich kontextfremde Evidence ihre Freigabewirkung.
 
-Der SHA-256-Hash ist dabei ausdrücklich nur eine lokale Integritätsprüfung gegen versehentliche Veränderung. Er ist **keine GitHub-Signatur** und ersetzt niemals die zweite Live-Abfrage.
+Der Maschinenfingerprint ist bewusst **keine Hardware-Attestation**. Er ist ein pseudonymer SHA-256 aus Hostname, Betriebssystem und Architektur und dient dazu, versehentliche oder einfache Evidence-Wiederverwendung zwischen Maschinen zu verhindern. Er beweist keine physische Maschinenidentität und enthält keine Hardware-Seriennummer.
 
 ### Umgesetzt
 
-- `Scripts/github_p0_evidence.py` sammelt tokenfrei Live-Daten und schreibt ein versioniertes JSON-Bundle.
-- Evidence enthält Repository, Branch, aktuellen `main`-SHA, Ruleset-ID, Enforcement, Contract-Status, Fehlerliste, Quellen und Beobachtungszeit.
-- FAIL-Zustände werden ebenfalls als Diagnose-Bundle geschrieben.
-- Evidence wird mit SHA-256 versiegelt; nachträgliche lokale Änderungen werden erkannt.
-- `Scripts/github_p0_evidence_validate.py` prüft Schema, Typ, Repository, Branch, Freshness, Status, Quellendpunkte und Integritäts-Hash.
-- gespeicherter PASS reicht technisch nicht: der Validator führt immer eine neue öffentliche GitHub-Abfrage aus.
-- ein veränderter `main`-SHA invalidiert die vorhandene Evidence automatisch.
-- geänderte Ruleset-ID oder Ruleset-Konfiguration werden als Drift erkannt.
-- maximale Evidence-Altersgrenze: 36 Stunden.
-- neue Regressionstests prüfen PASS-Bundle, fehlendes Ruleset, Manipulation, Stale-Evidence, falsches Repository, `main`-Drift, Ruleset-ID-Drift und Contract-Drift.
-- `P0 Infrastructure Observer` lädt das JSON-Bundle auch bei FAIL als GitHub-Actions-Artefakt hoch und setzt den Job erst danach rot.
-- `actions/upload-artifact` ist auf einen vollständigen Commit-SHA gepinnt.
+- `Scripts/runner_identity.py` als gemeinsame, nicht geheime Identitätsschicht ergänzt.
+- GitHub-Remote wird auf `owner/repo` normalisiert; rohe Remote-URLs oder Zugangsdaten werden nicht in die Evidence geschrieben.
+- HTTPS-, SCP-SSH- und `ssh://`-GitHub-Remotes werden unterstützt.
+- vollständiger 40-stelliger Git-HEAD wird ermittelt.
+- Worktree-Sauberkeit wird zentral bestimmt.
+- pseudonymer Maschinenfingerprint verwendet Schema `hostname-os-arch-sha256-v1`.
+- `Scripts/runner_readiness_contract.py` zentralisiert Schema, Pflichtchecks, Freshness und Kontextbindung.
+- Readiness-Schema von v2 auf **v3** angehoben.
+- der vollständige Pflichtcheck-Satz ist jetzt exakt definiert; fehlende **und zusätzliche** Checks blockieren.
+- Bool-Werte werden nicht als Integer-Schema-/Versionswerte akzeptiert.
+- `runner_readiness.py` bindet Evidence an Repository, Git-HEAD und Maschinenfingerprint.
+- `repository_identity_exact`, `git_head_bound` und `machine_identity_bound` sind neue Pflichtchecks.
+- `github_p0_admin.py` verwendet denselben zentralen Contract statt einer separaten vereinfachten Readiness-Logik.
+- unmittelbar vor `UE58_RUNNER_ENABLED=true` werden Repository, HEAD, Maschine und Worktree erneut live geprüft.
+- ein nach Readiness verschmutzter Worktree blockiert die Freigabe selbst bei unverändertem HEAD.
+- eine kopierte Evidence von anderer Maschine oder anderem Commit blockiert die Freigabe.
+- neue separate Regressionstests decken Repository-Normalisierung, exakten Check-Satz, Schema v3, Head-/Maschinen-Reuse, Worktree-Drift, Engine-Typen und Freshness ab.
 
 ### Erwartete Wirkung
 
-- nachvollziehbare Infrastruktur-Evidence statt flüchtiger Terminalausgabe
-- automatische Invalidierung alter Evidence nach Änderungen an `main`
-- Drift-Erkennung bei Ruleset-Änderungen
-- bessere Fehleranalyse durch gespeicherte FAIL-Bundles
-- reproduzierbare Release-/P0-Abnahme
-- klare Trennung zwischen Integritäts-Hash und echter Live-Authentizität
-- deutlich geringeres Risiko eines versehentlich wiederverwendeten alten PASS
+- deutlich geringeres Risiko kopierter Readiness-Evidence
+- kein Runner-Enable aus einem anderen Checkout
+- kein Runner-Enable nach uncommitteten Änderungen seit Readiness
+- fehlende oder erfundene Checks werden fail-closed behandelt
+- zentrale Contract-Logik reduziert Drift zwischen Collector und Admin-Gate
+- bessere Nachvollziehbarkeit bei realen Runner-Fehlern
+- höhere Codequalität durch getrennte Identity-, Contract- und Collector-Schichten
 
 ### Technischer Effekt
 
 ```text
-COLLECT
-→ live GitHub
-→ evidence.json
-→ SHA-256 seal
-
-VALIDATE
-→ stored contract
+READINESS SCHEMA v3
+→ repo binding
+→ HEAD binding
+→ machine binding
+→ exact checks
+→ UE 5.8
 → freshness
-→ integrity
-→ live GitHub re-check
-→ main-SHA binding
-→ ruleset binding
-→ P0 contract re-check
-→ PASS / DRIFT / FAIL
+
+ENABLE GATE
+→ live repo re-check
+→ live HEAD re-check
+→ live machine re-check
+→ live clean-worktree re-check
+→ central contract
+→ UE58_RUNNER_ENABLED=true / BLOCKED
 ```
 
 ### Aktueller belegter Zustand
 
-- PR #4 mit Ruleset-/Public-Verify-Schicht: gemergt
-- `main` nach PR #4: `deba9c92f0ff7d36b1c62b420ef5c450b93157eb`
-- Evidence-Collector: implementiert
-- Evidence-Live-Validator: implementiert
-- Observer-Artefaktpfad: implementiert
-- Regressionstests: implementiert
-- reales GitHub-P0-Ruleset: weiterhin noch nicht angewendet
-- echter Infrastruktur-PASS: daher weiterhin offen
-- Self-hosted UE-5.8 Runner: weiterhin offen
+- PR #4: gemergt
+- PR #5 Infrastructure Evidence Bundle: gemergt
+- `main` nach PR #5: `c0d26b925e39e119f22a04722a815e9c21c65b2b`
+- Runner Identity Layer: implementiert
+- Readiness Contract v3: implementiert
+- Collector auf v3 umgestellt: implementiert
+- Admin-Freigabegate auf Kontextbindung umgestellt: implementiert
+- Runner-Bindungs-Regressionstests: implementiert
+- reales GitHub-P0-Ruleset: weiterhin nicht nachgewiesen
+- realer Self-hosted UE-5.8-Runner: weiterhin nicht nachgewiesen
+- echter `RUNNER_READINESS: PASS`: weiterhin offen
 - CP1 Runtime: `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
 - Hosted `static-and-contract` PASS ist
-- Hosted `repository-quality` inklusive neuer Evidence-Regressionstests PASS ist
-- ein reales aktives P0-Ruleset auf GitHub vorhanden ist
-- der Observer ein PASS-Bundle erzeugt und hochlädt
-- `github_p0_evidence_validate.py` dasselbe Bundle gegen den weiterhin aktuellen Live-Serverzustand mit `GITHUB_P0_EVIDENCE: PASS` bestätigt
+- Hosted `repository-quality` inklusive Runner-Bindungs-Regressionen PASS ist
+- ein realer UE-5.8-Runner Schema-v3-Evidence mit `RUNNER_READINESS: PASS` erzeugt
+- dieselbe Maschine im selben sauberen Checkout die Evidence innerhalb von 30 Minuten erneut validiert
+- erst danach `UE58_RUNNER_ENABLED=true` technisch freigegeben werden kann
 
 ### Detailanleitung
 
-Siehe `Docs/GITHUB_P0_SETUP.md`, `Docs/PROJEKTSTATUS.md`, Issue #2 und das Evidence-Bundle aus `P0 Infrastructure Observer`.
+Siehe `Docs/GITHUB_P0_SETUP.md`, `Docs/PROJEKTSTATUS.md` und Issue #2. Ein realer Readiness-PASS bleibt ausdrücklich getrennt vom späteren CP1-Runtime-PASS.
