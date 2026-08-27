@@ -359,3 +359,60 @@ Die Logik ist durch zusätzliche Hosted-Regressionstests abgesichert.
 **Fehlbedienungsschutz:** sehr hoch  
 **Admin-Sicherheit:** hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-007 — Schutzkonfiguration von privilegiertem Schreibweg entkoppeln
+
+**Iteration:** P0 Independently Verifiable Ruleset Evidence  
+**Kategorie:** Evidence Integrity / GitHub Rulesets / Wartbarkeit  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — reales Ruleset serverseitig noch anzuwenden  
+**Aufwand:** 4/10  
+**Risiko:** 2/10
+
+### Verbesserungsvorschlag
+
+Den GitHub-P0-Schutz bevorzugt als Repository Ruleset statt ausschließlich als klassische Branch Protection abbilden und die komplette Soll-/Ist-Prüfung in ein gemeinsames, reines Contract-Modul auslagern.
+
+### Grund
+
+Die klassische Protection-Detail-API kann für bestimmte GitHub-Apps oder Token trotz sichtbarem Repositoryzustand mit 403 blockiert sein. Dann hängen Erzeugung und unabhängige Verifikation zu stark von derselben privilegierten Zugriffsschicht ab. Repository Rulesets sind dagegen bereits mit Repository-Lesezugriff sichtbar und eignen sich deshalb besser als unabhängig prüfbare Infrastruktur-Evidence.
+
+### Wirkung
+
+- Schutz kann nach dem Admin-Write durch eine zweite read-only Stelle vollständig geprüft werden
+- Soll-Payload und Ist-Validator verwenden dieselben zentralen Konstanten
+- weniger duplizierte GitHub-Regellogik
+- Ruleset-Duplikate werden nicht still erzeugt
+- Testfixtures validieren nur Logik und können keinen Live-PASS vortäuschen
+- klassische Branch Protection bleibt als kompatibler Fallback erhalten
+
+### Technischer Effekt
+
+Neu ist `Scripts/github_p0_ruleset.py` als pure Contract-Schicht. Sie definiert zentral:
+
+```text
+Repository + main
+→ Ruleset-Name
+→ active enforcement
+→ PR-Regel
+→ static-and-contract
+→ repository-quality
+→ strict/up-to-date
+→ deletion block
+→ non-fast-forward block
+→ keine Bypass-Akteure
+```
+
+`github_p0_admin.py --apply-ruleset` führt ein sicheres Create-or-Update aus und liest anschließend exakt dieses Ruleset zurück. `github_p0_status.py` bevorzugt den Ruleset-Lesepfad und nutzt klassische Branch Protection nur noch als Fallback.
+
+Die Regressionstests lehnen insbesondere `enforcement=evaluate`, fehlende Required Checks, fehlende Strictness, Bypass-Akteure sowie fehlende Delete-/Force-Push-Sperren ab.
+
+### Erwarteter Nutzen
+
+**Evidence-Integrität:** sehr hoch  
+**Robustheit:** sehr hoch  
+**Codequalität:** sehr hoch  
+**Wartbarkeit:** sehr hoch  
+**Gameplay-Risiko:** keines
