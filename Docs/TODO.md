@@ -1,284 +1,336 @@
 # BUNKER BEATS — MASTER TODO
 
-Version: 1.0 / aligned to current validated baseline
-Method: P0–P6 + Feature Contracts + Checkpoint Gates
-Current focus: CP1 Runtime / Core Integration
-
-> **Arbeitsregel:** Keine Aufgabe wird wegen ihres Umfangs begonnen, sondern weil sie den nächsten Engpass nachweisbar reduziert.
+**Arbeitsstand:** CP1 Runtime Integration  
+**Steuerungsmodell:** P0–P6 + Gates + Evidence  
+**Grundsatz:** Nicht möglichst viel anfangen, sondern den **nächsten Engpass vollständig beweisen**.
 
 ---
 
-# 0. CURRENT TRUTH
+# 0. 🚦 CURRENT TRUTH
 
-## Proven
+## 🟢 Bewiesen / vorhanden
 
-- [x] Game vision documented
-- [x] Character base model defined
-- [x] 20 Special Abilities defined
-- [x] 2-of-20 rule defined
-- [x] 190 combinations enumerated
-- [x] 570 headless deterministic scenario checks
-- [x] 0 structural/range failures in current headless run
-- [x] Regression analysis concept
-- [x] Optimization analysis concept
-- [x] Diagnostics / logging architecture
-- [x] AutoStart / dependency architecture
-- [x] Living player guide policy
+- [x] Unreal-Projektstruktur vorhanden
+- [x] UE-5.8-Engine-Association definiert
+- [x] Game-Target vorhanden
+- [x] Editor-Target vorhanden
+- [x] primäres Game-Modul vorhanden
+- [x] CP1 Character-Spawn-/Movement-Test implementiert
+- [x] kontrollierte Testwelt für CP1 vorgesehen
+- [x] Frame-Time-Evidence implementiert
+- [x] Start-/Endposition-Evidence implementiert
+- [x] Velocity-/Speed-Evidence implementiert
+- [x] Movement-Component-Evidence implementiert
+- [x] stale Evidence wird vor Runtime-Lauf entfernt
+- [x] One-Command-Runner Linux/Windows vorhanden
+- [x] `Scripts/ci_verify.py` vorhanden
+- [x] statische GitHub-Validierung vorhanden
+- [x] Runtime-Workflow für Self-hosted UE-5.8-Runner vorhanden
+- [x] GitHub-Repository-Control-Plane vorhanden
+- [x] 20 Spezialfähigkeiten definiert
+- [x] 2-aus-20-Regel definiert
+- [x] 190 Kombinationen im Headless-Modell abgedeckt
+- [x] deterministische Headless-/Regression-Grundlage vorhanden
 
-## Not Proven
+## 🟡 Vorbereitet, aber noch nicht Runtime-bewiesen
 
-- [ ] Unreal Engine compile
-- [ ] Unreal Editor boot
-- [ ] PIE
-- [ ] 3D movement
-- [ ] animation
-- [ ] runtime Character Creation
-- [ ] runtime Ability Effects
-- [ ] event runtime
-- [ ] crowd runtime
-- [ ] rival runtime
-- [ ] save/load
-- [ ] packaged build
-- [ ] full Auto Playtester
+- [ ] UE-5.8-Projekt erfolgreich auf Zielmaschine kompilieren
+- [ ] Editor-Target erfolgreich kompilieren
+- [ ] CP1-Automation in echter UE-5.8-Runtime ausführen
+- [ ] Character Spawn mit echter Runtime-Evidence bestätigen
+- [ ] messbare Bewegung bestätigen
+- [ ] Telemetrie aus echtem Lauf prüfen
+- [ ] CP1 Gate auf echte Evidence anwenden
 
----
+## 🔴 Darf aktuell NICHT als PASS gelten
 
-# P0 — INTEGRITY / OPERATIONS
+- [ ] CP1 Runtime GREEN
+- [ ] vollständige 3D-Interaktion
+- [ ] Ability-Effekte in Unreal Runtime
+- [ ] XP-/Progressionsfluss in Unreal Runtime
+- [ ] Event-Runtime
+- [ ] Crowd-Runtime
+- [ ] Rivalen-Runtime
+- [ ] Save/Load-Runtime
+- [ ] Packaged Build
 
-## P0.1 Repository Baseline
-
-**Goal:** reproducible project state.
-
-- [ ] repository root verify/create
-- [ ] branch verify
-- [ ] working tree verify
-- [ ] canonical version source
-- [ ] build identity
-- [ ] engine version record
-- [ ] platform target record
-
-**DoD**
-- reproducible project identity
-- no ambiguous version source
-- Git state reportable
-
-**Risk:** HIGH if omitted before release.
+> **Evidence-Regel:** `nicht ausgeführt` = `UNOBSERVED/BLOCKED`, niemals `PASS`.
 
 ---
 
-## P0.2 Diagnostics
+# 1. 🔥 JETZT — ACTIVE BOARD
 
-- [x] diagnostic categories defined
-- [x] stable event IDs defined
-- [x] diagnostic codes defined
-- [x] session/run correlation defined
-- [x] human-readable messages defined
-- [x] JSONL structure defined
-- [x] debug snapshots defined
-- [ ] rotation verified at runtime
-- [ ] sensitive-data redaction runtime-tested
-- [ ] failure-report aggregation
+## P0.1 — Echter UE-5.8-CP1-Lauf
 
----
+**Priorität:** P0  
+**Nutzen:** 10/10  
+**Aufwand:** niedrig bis mittel  
+**Risiko:** niedrig, wenn Evidence-Regeln eingehalten werden  
+**Blockiert:** gesamter weitere Runtime-Pfad
 
-## P0.3 Persistence
+### Ziel
 
-- [ ] SaveSchemaVersion
-- [ ] stable persistent IDs
-- [ ] atomic writes
-- [ ] backup
-- [ ] recovery
-- [ ] migration table
-- [ ] corrupt-save test
-- [ ] migration regression tests
+Den ersten echten technischen Checkpoint auf einer Maschine mit Unreal Engine 5.8 beweisen.
 
-**Gate:** no release candidate before persistence integrity is proven.
+### Aufgaben
 
----
+- [ ] UE-5.8-Maschine bereitstellen
+- [ ] C++-Toolchain prüfen
+- [ ] Repository auf Zielmaschine auschecken
+- [ ] `python3 Scripts/ci_verify.py` / Windows-Variante ausführen
+- [ ] `RUN_CP1_UE58_ALL.sh` oder `.bat` starten
+- [ ] Build-Ergebnis prüfen
+- [ ] Character-Spawn-Evidence prüfen
+- [ ] Movement-Evidence prüfen
+- [ ] Frame-Time prüfen
+- [ ] Position vorher/nachher prüfen
+- [ ] Velocity/Speed prüfen
+- [ ] Movement-Component-Status prüfen
+- [ ] CP1 Gate ausführen
+- [ ] Evidence als GitHub-Artifact sichern
 
-# P1 — CORE GAME
+### Definition of Done
 
-## P1.1 CP1 Technical Boot
+CP1 ist nur abgeschlossen, wenn:
 
-**Priority:** P1
-**Current status:** 🟡 Bootstrap prepared / Runtime blocked
+- [ ] UE 5.8 tatsächlich verwendet wurde
+- [ ] Build PASS
+- [ ] Character Spawn PASS
+- [ ] Movement Component gültig/aktiv
+- [ ] Displacement messbar > erforderlicher Grenzwert
+- [ ] Position vorhanden
+- [ ] Velocity vorhanden
+- [ ] Frame-Time vorhanden
+- [ ] Evidence stammt aus demselben Lauf
+- [ ] keine alte Evidence kann PASS erzeugen
+- [ ] CP1 Gate PASS
 
-### Goal
+### Abbruchregel
 
-Project starts in Unreal, compiles, loads a test map and exposes the first playable character.
+Bei erstem echten Build-/Runtime-Fehler:
 
-### Dependencies
-
-- Unreal 5.8
-- C++ build toolchain
-- project module
-- input
-- camera
-- diagnostics
-
-### Tasks
-
-- [ ] detect real Unreal installation
-- [ ] compile runtime module
-- [ ] compile editor target
-- [ ] create/verify test level
-- [ ] spawn player
-- [ ] initialize diagnostics session
-- [ ] show build identity
-- [ ] run boot smoke test
-
-### Acceptance
-
-`Boot → Map → Character → Diagnostics → no blocking error`
-
-### Gate
-
-**CP1 = GREEN only after actual execution.**
+1. Fehler klassifizieren.
+2. kleinste Ursache isolieren.
+3. nur diese Ursache beheben.
+4. passenden Regressionstest ergänzen.
+5. CP1 erneut vollständig ausführen.
 
 ---
 
-# P1.2 CP2 Movement
+## P0.2 — GitHub Self-hosted UE-5.8-Runner
 
-### Dependencies
+**Ziel:** CP1 wiederholbar über GitHub ausführen.
 
-CP1 PASS
+- [ ] Self-hosted Runner auf UE-5.8-Maschine installieren
+- [ ] Label `self-hosted` prüfen
+- [ ] Label `unreal` hinzufügen
+- [ ] Label `ue-5.8` hinzufügen
+- [ ] Repository-Variable `UE58_RUNNER_ENABLED=true` setzen
+- [ ] Runner nur für vertrauenswürdigen Code zulassen
+- [ ] ersten Workflow-Lauf starten
+- [ ] Runtime-Evidence-Artifact prüfen
+- [ ] Runner-Ausfall als `BLOCKED`, nicht als Gameplay-FAIL behandeln
 
-### Tasks
-
-- [ ] walk
-- [ ] run
-- [ ] turn
-- [ ] collision
-- [ ] camera
-- [ ] controller/input
-- [ ] locomotion animation
-- [ ] evaluate Motion Matching fit
-- [ ] movement regression case
-
-### Acceptance
-
-Character can move predictably with no blocking input/collision defect.
+**Gate:** Erst danach ist CP1 als wiederholbare CI-Prüfung etabliert.
 
 ---
 
-# P1.3 CP3 Interaction
+## P0.3 — Repository-Gate härten
 
-### Dependencies
-
-CP2
-
-### Tasks
-
-- [ ] IInteractable contract
-- [ ] prompt
-- [ ] availability state
-- [ ] disabled reason
-- [ ] execute
-- [ ] success feedback
-- [ ] failure feedback
-- [ ] diagnostic event
-- [ ] functional test
-
----
-
-# P1.4 Character Identity
-
-### Dependencies
-
-CP3 data path + Character runtime
-
-### Tasks
-
-- [ ] Pppoppi
-- [ ] Atze
-- [ ] equal base skills
-- [ ] profile
-- [ ] bio
-- [ ] funny info
-- [ ] ability list
-- [ ] exactly 2 selection
-- [ ] duplicate rejection
-- [ ] persistent IDs
-- [ ] ability selection telemetry
-
-### Acceptance
-
-Two characters start equal and selection produces persistent differentiated state.
+- [x] `.gitignore`
+- [x] `.gitattributes`
+- [x] `.editorconfig`
+- [x] CODEOWNERS
+- [x] PR-Template
+- [x] Issue-Templates
+- [x] Dependabot
+- [x] `Validate`-Workflow
+- [x] UE-5.8-Runtime-Workflow
+- [ ] `Validate` als Required Check für `main`
+- [ ] Branch-Protection / Ruleset für `main`
+- [ ] direkte Pushes auf `main` verhindern
+- [ ] Review-Anforderung festlegen
+- [ ] Merge-Strategie final festlegen
+- [ ] Release-/Tag-Regel definieren
 
 ---
 
-# P1.5 Tasks
+# 2. 🟣 DIREKT NACH CP1 — ERSTER SPIELBARER VERTIKALSCHNITT
 
-- [ ] definition
-- [ ] prerequisites
-- [ ] target
-- [ ] actions
-- [ ] duration
-- [ ] risk
-- [ ] success
-- [ ] failure
-- [ ] rewards
-- [ ] consequences
-- [ ] telemetry
-- [ ] deterministic replay support
+> **Reihenfolge bleibt verbindlich:** Character → Interaction → erster Task → Ability-Effekt → XP.
 
 ---
 
-# P1.6 CP4 Progression
+## P1.1 — Interaction Core
 
-### Tasks
+**Abhängigkeit:** CP1 PASS
 
-- [ ] skill data
-- [ ] XP
-- [ ] levels 1–5
-- [ ] centralized thresholds
-- [ ] skill effects
-- [ ] boundary tests
-- [ ] UI
-- [ ] save-state representation
+### Ziel
 
-### Initial design data
+Der Character erkennt genau ein interaktives Objekt und kann eine definierte Aktion auslösen.
 
-Level 1 = 0 XP
-Level 2 = 100 XP
-Level 3 = 250 XP
-Level 4 = 500 XP
-Level 5 = 850 XP
+### Aufgaben
 
-These values remain prototype data until playtest evidence supports them.
+- [ ] `IInteractable`-/Interaction-Vertrag festlegen
+- [ ] Interaktionsziel erkennen
+- [ ] verfügbar / nicht verfügbar unterscheiden
+- [ ] verständlichen Grund bei Sperre liefern
+- [ ] Interaktion ausführen
+- [ ] Success-Feedback
+- [ ] Failure-Feedback
+- [ ] Diagnoseevent schreiben
+- [ ] funktionalen Automation-Test ergänzen
+
+### DoD
+
+`Character → erkennt Objekt → Interaktion → bestätigtes Ergebnis → Evidence`
 
 ---
 
-# P1.7 CP5 Event
+## P1.2 — Erster echter Task
 
-### Tasks
+**Abhängigkeit:** Interaction PASS
 
-- [ ] Music profile
-- [ ] Room
-- [ ] Stage
-- [ ] Lighting
-- [ ] Atmosphere
-- [ ] Performance
+### Ziel
+
+Eine kleine Aufgabe komplett vom Start bis zum Ergebnis spielen.
+
+### Aufgaben
+
+- [ ] TaskDefinition festlegen
+- [ ] stabile Task-ID
+- [ ] Voraussetzung
+- [ ] Ziel
+- [ ] erforderliche Aktion
+- [ ] Fortschritt
+- [ ] Erfolg
+- [ ] Fehlschlag
+- [ ] Reward
+- [ ] Konsequenz
+- [ ] Telemetrie
+- [ ] deterministischen Test ergänzen
+
+### Empfohlener erster Task
+
+Ein klar begrenzter Bunker-Aufbau-/Reparaturtask mit genau einer Interaktion und überprüfbarem Ergebnis.
+
+---
+
+## P1.3 — Ability-Effekt im Task
+
+**Abhängigkeit:** Task PASS
+
+### Ziel
+
+Mindestens eine Spezialfähigkeit verändert nachweisbar den Task-Ausgang.
+
+- [ ] eine Ability auswählen
+- [ ] Ability-ID stabil halten
+- [ ] Ability auf Task anwenden
+- [ ] Effekt vor/nach Anwendung messen
+- [ ] Effektbegrenzung definieren
+- [ ] kein versteckter Parallel-Regelpfad
+- [ ] Regressionstest Ability an/aus
+- [ ] Ergebnis für Spieler erklären
+
+### DoD
+
+Gleicher Task + gleiche Ausgangslage + Ability an/aus = **messbar unterschiedliches, erklärbares Ergebnis**.
+
+---
+
+## P1.4 — XP / Progression
+
+**Abhängigkeit:** Task + Ability-Effekt PASS
+
+- [ ] XP-Ereignis definieren
+- [ ] XP nur bei bestätigtem Ergebnis vergeben
+- [ ] zentrale Threshold-Tabelle
+- [ ] Level 1–5
+- [ ] Grenzwerttests
+- [ ] doppelte XP-Vergabe verhindern
+- [ ] Runtime-Evidence
+- [ ] UI-/Feedback-Schnittstelle vorbereiten
+
+### Prototypwerte
+
+| Level | XP |
+|---:|---:|
+| 1 | 0 |
+| 2 | 100 |
+| 3 | 250 |
+| 4 | 500 |
+| 5 | 850 |
+
+Diese Werte bleiben Prototypdaten, bis Playtests sie stützen.
+
+---
+
+# 3. 🟦 DANACH — CHARACTER / ABILITY SYSTEM
+
+## Character Identity
+
+- [ ] Pppoppi Runtime-Profil
+- [ ] Atze Runtime-Profil
+- [ ] gleiche Startwerte sicherstellen
+- [ ] persistente Character-ID
+- [ ] Bio-/Info-Daten anbinden
+- [ ] Skill-Anzeige
+
+## 2-aus-20 Ability Selection
+
+- [ ] alle 20 Abilities als stabile Definitionen
+- [ ] genau 2 auswählbar
+- [ ] keine Duplikate
+- [ ] 2/20-Zähler
+- [ ] Auswahl bestätigen
+- [ ] Auswahl persistent speichern
+- [ ] Telemetrie schreiben
+- [ ] ungültige Auswahl verständlich erklären
+- [ ] 190-Kombinationsscan weiter als Headless-Regression verwenden
+
+---
+
+# 4. 🟠 PERSISTENCE — VOR ERSTEM RELEASE CANDIDATE
+
+- [ ] `SaveSchemaVersion`
+- [ ] stabile persistente IDs
+- [ ] atomare Schreibvorgänge
+- [ ] Backup vor Migration
+- [ ] Recovery-Pfad
+- [ ] Migrationstabelle
+- [ ] beschädigten Save simulieren
+- [ ] Migration Regression Tests
+- [ ] Character-Auswahl speichern/laden
+- [ ] Ability-Auswahl speichern/laden
+- [ ] Task-/XP-Stand speichern/laden
+
+**Release-Gate:** Kein Release Candidate ohne bewiesene Save-Integrität.
+
+---
+
+# 5. 🔵 SPÄTER — EVENT / CROWD / RIVAL / DISCOVERY
+
+Diese Bereiche bleiben wichtig, sind aber **nicht der aktuelle Engpass**.
+
+## Event
+
 - [ ] EventDefinition
+- [ ] Musikprofil
+- [ ] Raum
+- [ ] Bühne
+- [ ] Licht
+- [ ] Atmosphäre
+- [ ] Performance
 - [ ] EventBuilder
 - [ ] EventEvaluator
-- [ ] Outcome object
-- [ ] event history
-- [ ] result explanation
+- [ ] Outcome
+- [ ] Event-Historie
+- [ ] Ergebnis erklären
 
-### Initial valid strategy families
+## Crowd
 
-- Sound
-- Atmosphere
-- Performance
-
----
-
-# P2 — SIMULATION
-
-## P2.1 CP6 Crowd
-
-### Target archetypes
+Archetypen:
 
 - [ ] Basshead
 - [ ] Dancer
@@ -286,7 +338,7 @@ These values remain prototype data until playtest evidence supports them.
 - [ ] Underground Purist
 - [ ] Social Follower
 
-### State model
+States:
 
 - [ ] ARRIVING
 - [ ] WARMING_UP
@@ -295,157 +347,120 @@ These values remain prototype data until playtest evidence supports them.
 - [ ] BORED
 - [ ] LEAVING
 
-### Metrics
+Evidence:
 
-- [ ] attendance
-- [ ] engagement
-- [ ] retention
-- [ ] satisfaction
-- [ ] concept affinity
-- [ ] peak crowd
-- [ ] early exits
+- [ ] deterministischer Seed
+- [ ] Gewichtungstest
+- [ ] State-Transition-Test
+- [ ] 100+ repräsentative Läufe
+- [ ] Baseline-/Current-Vergleich
 
-### Validation
+## Rival
 
-- [ ] deterministic seed
-- [ ] archetype weight test
-- [ ] state transition test
-- [ ] 100+ representative runs
-- [ ] compare baseline/current
+- [ ] Rivalen-ID
+- [ ] Ziel
+- [ ] Strategie
+- [ ] Skills
+- [ ] Risikoneigung
+- [ ] Aktionsauswahl
+- [ ] Ergebnis
+- [ ] Debug-Erklärung
+- [ ] erster vollständig datengetriebener Rivale
 
----
+## Discovery
 
-## P2.2 CP7 Rival
-
-- [ ] identity
-- [ ] goal
-- [ ] strategy
-- [ ] skills
-- [ ] risk tolerance
-- [ ] action selection
-- [ ] result
-- [ ] debug explanation
-
-### First rival
-
-One complete reusable data-driven rival.
+- [ ] versteckter Ort
+- [ ] Entdeckungsbedingung
+- [ ] Hinweis
+- [ ] Reward
+- [ ] World Flag
+- [ ] Story-Konsequenz
+- [ ] Persistence
 
 ---
 
-## P2.3 CP8 Discovery
+# 6. 🎛️ UX / SPIELERFÜHRUNG
 
-- [ ] hidden location
-- [ ] discovery condition
-- [ ] clue/hint
-- [ ] reward
-- [ ] world flag
-- [ ] story consequence
-- [ ] persistence
+## Character Creation
 
----
+- [ ] Character-Auswahl
+- [ ] Profilkarte
+- [ ] Skills
+- [ ] Ability Grid
+- [ ] 2/20-Zähler
+- [ ] klare Auswahlmarkierung
+- [ ] Wirkung erklären
+- [ ] Bestätigung
+- [ ] ungültige Auswahl reparierbar machen
 
-# P3 — UX
+## Gameplay HUD
 
-## P3.1 Character Creation
+- [ ] aktuelles Ziel
+- [ ] Interaktionshinweis
+- [ ] Task-Status
+- [ ] Skill-/Ability-Feedback
+- [ ] XP-/Level-Feedback
+- [ ] Event-Status
+- [ ] Crowd-Status
+- [ ] Rivalen-Status
+- [ ] Konsequenzen erklären
 
-- [ ] character choice
-- [ ] profile card
-- [ ] skills
-- [ ] 20 ability grid
-- [ ] 2/20 counter
-- [ ] selected state
-- [ ] impact explanation
-- [ ] confirmation
-- [ ] recovery from invalid choice
+## Hilfe
 
-## P3.2 Gameplay HUD
-
-- [ ] objective
-- [ ] interaction
-- [ ] task state
-- [ ] skill feedback
-- [ ] event state
-- [ ] crowd state
-- [ ] rival state
-- [ ] consequence feedback
-
-## P3.3 Player Help
-
-- [ ] first-run guide
-- [ ] contextual help
-- [ ] ability glossary
-- [ ] error help
-- [ ] recovery instructions
-- [ ] current controls
+- [x] Root-`ANLEITUNG.md`
+- [ ] First-Run-Guide im Spiel
+- [ ] kontextbezogene Hilfe
+- [ ] Ability-Glossar
+- [ ] Fehlerhilfe
+- [ ] Recovery-Hilfe
+- [ ] aktuelle Steuerung automatisch dokumentieren
 
 ---
 
-# P4 — PRESENTATION
+# 7. 🎨 PRESENTATION
+
+Erst hochpriorisieren, wenn der passende Gameplay-Pfad bewiesen ist.
 
 ## Character
 
-- [ ] placeholder model
-- [ ] Pppoppi identity
-- [ ] Atze identity
-- [ ] avatar customization base
+- [ ] Placeholder-Modell
+- [ ] Pppoppi-Identität
+- [ ] Atze-Identität
+- [ ] Customization-Basis
 
 ## Animation
 
-- [ ] locomotion
-- [ ] interact
-- [ ] carry
-- [ ] repair
-- [ ] setup
-- [ ] performance
-- [ ] success
-- [ ] failure
+- [ ] Locomotion
+- [ ] Interact
+- [ ] Carry
+- [ ] Repair
+- [ ] Setup
+- [ ] Performance
+- [ ] Success
+- [ ] Failure
 
 ## Audio
 
-- [ ] bunker ambience
-- [ ] UI feedback
-- [ ] event feedback
-- [ ] crowd feedback
-- [ ] rival cues
+- [ ] Bunker-Ambience
+- [ ] UI-Feedback
+- [ ] Task-Feedback
+- [ ] Event-Feedback
+- [ ] Crowd-Feedback
+- [ ] Rivalen-Cues
 
-## VFX / Lighting
+## Licht / VFX
 
-- [ ] bunker readability
-- [ ] event atmosphere
-- [ ] crowd readability
-- [ ] restrained initial effect budget
-
----
-
-# P5 — DATA / EXTENSIBILITY
-
-## Definitions
-
-- [ ] CharacterDefinition
-- [ ] SkillDefinition
-- [ ] AbilityDefinition
-- [ ] TaskDefinition
-- [ ] EventDefinition
-- [ ] CrowdDefinition
-- [ ] RivalDefinition
-- [ ] SecretDefinition
-- [ ] DialogueDefinition
-
-## Validation
-
-- [ ] stable IDs
-- [ ] duplicate-ID scan
-- [ ] missing-reference scan
-- [ ] numeric-range scan
-- [ ] schema versioning
+- [ ] Bunker-Lesbarkeit
+- [ ] Interaktionslesbarkeit
+- [ ] Event-Atmosphäre
+- [ ] Crowd-Lesbarkeit
+- [ ] initiales Effektbudget begrenzen
 
 ---
 
-# P6 — AUTOMATION / QUALITY
+# 8. 🧪 QUALITY / AUTOMATION
 
-## P6.1 Auto Playtester
-
-### Scenarios
+## Auto Playtester
 
 - [ ] T01_BOOT
 - [ ] T02_MOVEMENT
@@ -454,16 +469,17 @@ One complete reusable data-driven rival.
 - [ ] T05_CHARACTER_CREATION
 - [ ] T06_ABILITY_SELECTION
 - [ ] T07_ABILITY_EFFECT
-- [ ] T08_EVENT
-- [ ] T09_CROWD
-- [ ] T10_RIVAL
-- [ ] T11_DISCOVERY
-- [ ] T12_RECOVERY
-- [ ] T13_REPEATABILITY
-- [ ] T14_SAVE_LOAD
-- [ ] T15_PACKAGED_BUILD
+- [ ] T08_XP_PROGRESSION
+- [ ] T09_EVENT
+- [ ] T10_CROWD
+- [ ] T11_RIVAL
+- [ ] T12_DISCOVERY
+- [ ] T13_RECOVERY
+- [ ] T14_REPEATABILITY
+- [ ] T15_SAVE_LOAD
+- [ ] T16_PACKAGED_BUILD
 
-### Modes
+### Testmodi später
 
 - [ ] Conservative
 - [ ] Aggressive
@@ -473,141 +489,161 @@ One complete reusable data-driven rival.
 
 ---
 
-## P6.2 Regression
+## Regression
 
-- [x] baseline/current concept
-- [x] metric direction handling
-- [x] threshold model
-- [x] severity model
-- [x] first-failure guidance
-- [ ] real Unreal test ingestion
-- [ ] historical baseline registry
-- [ ] trend detection
-- [ ] checkpoint auto-gating
+- [x] Baseline-/Current-Konzept
+- [x] Severity-Grundlage
+- [x] Threshold-Grundlage
+- [x] First-Failure-Guidance
+- [x] Solution-Learning-Grundlage
+- [ ] echte Unreal-Evidence automatisch ingestieren
+- [ ] historische Runtime-Baseline Registry
+- [ ] Trend-Erkennung
+- [ ] automatische Checkpoint-Gates
+- [ ] Flaky-Test-Erkennung
 
-### Rule
+### Ampelregel
 
-Regression result:
-- GREEN = no material regression
-- YELLOW = evidence incomplete / blocked
-- RED = material regression / failure
-
----
-
-## P6.3 Optimization
-
-- [x] candidate ranking concept
-- [x] weighted objective model
-- [x] Pareto concept
-- [ ] live runtime metrics
-- [ ] historical comparisons
-- [ ] constrained candidate search
-- [ ] human approval gate before source changes
-
-**No automatic balance/code mutation.**
+- 🟢 **GREEN** = bewiesen, keine materielle Regression
+- 🟡 **YELLOW** = Evidence fehlt oder Prüfung blockiert
+- 🔴 **RED** = echter Fehler / materielle Regression
 
 ---
 
-## P6.4 Autoformat / Preflight
+## Preflight / Format
 
-- [x] JSON normalization
-- [x] whitespace normalization
-- [x] Python syntax checks
-- [ ] C++ formatter integration after engine/toolchain is available
-- [ ] pre-commit validation
-- [ ] generated-file exclusion
-
----
-
-# CP10 — VERTICAL SLICE GATE
-
-All must be proven:
-
-- [ ] start
-- [ ] move
-- [ ] interact
-- [ ] task
-- [ ] skill XP
-- [ ] choose 2 of 20 abilities
-- [ ] ability changes available play
-- [ ] event build
-- [ ] event execution
-- [ ] crowd reaction
-- [ ] rival competition
-- [ ] secret
-- [ ] progression
-- [ ] deterministic replay
-- [ ] automated test report
-- [ ] regression gate
-- [ ] player guide current
+- [x] Python-Syntaxprüfung
+- [x] JSON-Prüfung
+- [x] generierte UE-Ordner via `.gitignore` ausschließen
+- [x] EditorConfig
+- [x] Git Attributes
+- [ ] C++-Formatter mit echter Toolchain integrieren
+- [ ] Pre-Commit-Hook optional bereitstellen
+- [ ] Workflow-Linting ergänzen
+- [ ] Dokumentations-Linkprüfung ergänzen
 
 ---
 
-# CURRENT NEXT STEP
+# 9. 🧠 LEARNING / SELF-REPAIR
 
-## 🟢 CP1 Runtime
+- [x] Fehler-Taxonomie vorhanden
+- [x] Lösungsvorschläge vorhanden
+- [x] Erfolgs-/Fehlversuche modellierbar
+- [x] Ranking nach Ergebnissen möglich
+- [x] Kontext für Toolchain-Reparaturen vorhanden
+- [ ] echte UE-Reparaturergebnisse automatisch zurückspielen
+- [ ] Erfolgsquoten nach OS trennen
+- [ ] Erfolgsquoten nach UE-Version trennen
+- [ ] Erfolgsquoten nach Fehlertyp trennen
+- [ ] widersprüchliche Lernergebnisse erkennen
+- [ ] veraltete Regeln ablaufen lassen
+- [ ] menschliches Review für promotete Regeln
 
-**Objective:** Actual Unreal compile + boot + smoke test.
-
-**Cause / bottleneck:** Runtime toolchain is the only critical proof gap remaining for the current core path.
-
-**Dependencies:**
-- Unreal Engine 5.8
-- C++ toolchain
-- project module
-- test map
-- character
-- diagnostics
-
-**Change class:** Technical Foundation / Runtime Integration
-
-**Validation:** Boot Smoke + Build + Character Spawn + Diagnostics
-
-**Documentation impact:**
-- README
-- TODO
-- PROJEKTSTATUS
-- GAMEPLAY_GUIDE only if visible controls/state change.
+**Regel:** Self-Repair darf nie Evidence fälschen oder Tests abschwächen.
 
 ---
 
-# NEXT-3 FORECAST
+# 10. 🏁 GATES
 
-## Next iteration
+## CP1 — Build + Spawn + Movement
 
-CP1 Runtime.
+- [ ] echter UE-5.8-Build
+- [ ] Character Spawn
+- [ ] Movement
+- [ ] Runtime-Telemetrie
+- [ ] Evidence frisch
+- [ ] Gate PASS
 
-## +3 iterations
+## Vertical Slice 1
 
-Likely convergence:
-Character → Interaction → Ability Selection.
+- [ ] CP1
+- [ ] Interaction
+- [ ] erster Task
+- [ ] Ability-Effekt
+- [ ] XP
+- [ ] automatisierter End-to-End-Test
 
-## Next release candidate
+## Vertical Slice Core
 
-First complete Vertical-Slice core:
-Character + Task + Event + Crowd + Rival + Discovery + automated regression.
+- [ ] Start
+- [ ] Movement
+- [ ] Interaction
+- [ ] Task
+- [ ] Character-Auswahl
+- [ ] 2/20 Ability-Auswahl
+- [ ] Ability-Effekt
+- [ ] XP / Progression
+- [ ] Event
+- [ ] Crowd
+- [ ] Rival
+- [ ] Discovery
+- [ ] Save/Load
+- [ ] deterministischer Replay-Nachweis
+- [ ] Regression Gate
+- [ ] Spielerhilfe aktuell
 
-Only pursue deeper presentation/multiplayer after the core slice proves itself.
+---
 
-## Runtime Integration
-- [x] thin Character Runtime Adapter scaffold
-- [x] transport validation boundary
-- [x] human-readable adapter diagnostics
-- [x] adapter static checks
-- [ ] bind adapter to actual Gameplay API runtime in Unreal
-- [ ] compile with Unreal 5.8
-- [ ] PIE validation
+# 11. 🚫 NICHT JETZT
 
-## Ability-driven Task Effects
-- [x] Datenmodell für Task-Tags
-- [x] Progress-/Risiko-Modifikatoren
-- [x] 190er-Kombinationsscan
-- [x] Regressionsevidenz für den ersten Task
-- [ ] Szenario-Balance-Matrix erweitern
+Bis CP1 + erster Vertikalschnitt bewiesen sind, nur bei zwingender Abhängigkeit beginnen:
 
-## CP1 Runtime Evidence 8.3
-- [x] Target-machine runner
-- [x] real Build step
-- [x] exact CP1 CharacterSpawnMovement Automation test
-- [x] evidence JSON
-- [ ] successful execution on UE-5.8-equipped target machine
+- [ ] große Grafik-Politur
+- [ ] umfangreiche Animationserweiterung
+- [ ] Crowd-Komplexität
+- [ ] mehrere Rivalen
+- [ ] großes Event-Content-System
+- [ ] Multiplayer
+- [ ] tiefes Balancing ohne Runtime-Daten
+- [ ] automatische Code-/Balance-Mutation ohne Review
+
+---
+
+# 12. 📍 NEXT BEST ACTION
+
+## 🟢 Empfohlen
+
+**Echten UE-5.8-CP1-Lauf auf der Zielmaschine ausführen.**
+
+### Warum?
+
+- Nutzen: **10/10**
+- Erkenntnisgewinn: **10/10**
+- zusätzliche Infrastruktur nötig: **gering**
+- blockiert nächsten Gameplay-Slice: **ja**
+
+### Direkt danach
+
+Wenn CP1 GREEN:
+
+```text
+Interaction
+→ erster Task
+→ Ability-Effekt
+→ XP
+```
+
+Wenn CP1 RED:
+
+```text
+ersten echten Fehler isolieren
+→ kleinste Reparatur
+→ Regressionstest
+→ vollständigen CP1-Lauf wiederholen
+```
+
+---
+
+# 13. ✅ TODO-PFLEGEREGELN
+
+Bei jeder Entwicklungsiteration:
+
+1. **CURRENT TRUTH** zuerst aktualisieren.
+2. Nur tatsächlich bewiesene Punkte abhaken.
+3. Blockierte Punkte gelb lassen, nicht grün umdeuten.
+4. `NEXT BEST ACTION` auf genau einen Hauptengpass begrenzen.
+5. Neue Aufgaben einer Priorität und einem Gate zuordnen.
+6. Abhängigkeiten sichtbar machen.
+7. Erledigte technische Arbeiten mit Test/Evidence verknüpfen.
+8. README, ANLEITUNG und PROJEKTSTATUS synchron halten, wenn sich Bedienung oder Status ändert.
+9. Große neue Ideen in den passenden späteren Bereich einordnen statt den aktiven P0-Pfad zu verwässern.
