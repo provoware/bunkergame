@@ -540,3 +540,71 @@ Die separate Testdatei `Scripts/tests/test_runner_evidence_binding.py` prüft Re
 **Codequalität:** sehr hoch  
 **Wartbarkeit:** hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-010 — Runtime-GREEN gegen stale, kopierte und manipulierte Evidence absichern
+
+**Iteration:** CP1 Runtime Evidence Contract v3  
+**Kategorie:** Runtime Evidence / No-Fake-Success / Regression Prevention  
+**Priorität:** P0  
+**Status:** 🟡 IMPLEMENTIERT — Hosted-Abnahme und echter UE-5.8-Lauf noch offen  
+**Aufwand:** 5/10  
+**Risiko:** 3/10
+
+### Verbesserungsvorschlag
+
+CP1-Runtime-GREEN nicht mehr aus einem einzelnen Evidence-JSON und einigen eingebetteten Telemetriekennzahlen ableiten. Stattdessen muss das Gate eine **frische, laufgebundene Beweiskette** aus aktuellem Checkout, Maschine, Unreal-Lauf und tatsächlich vorhandener Telemetrie-Datei erneut validieren.
+
+### Grund
+
+Runtime-GREEN ist fachlich stärker als Readiness. Ein altes `CP1_runtime_evidence.json`, ein gemeinsam kopiertes Evidence-/Telemetry-Paar oder eine nachträglich veränderte Telemetrie darf deshalb keinen aktuellen CP1-Erfolg vortäuschen. Freshness und Datei-Hash allein reichen nicht vollständig aus, weil ein kopiertes Paar vom selben Commit innerhalb des Zeitfensters weiterhin plausibel aussehen könnte.
+
+Die zusätzliche `run_id` löst diesen Restfall: Sie wird vor dem Lauf von Python erzeugt, als Command-Line-Challenge an Unreal übergeben und vom C++-Automationstest selbst in die erzeugte Telemetrie zurückgeschrieben.
+
+### Wirkung
+
+- alte Runtime-Evidence wird vor jedem neuen Versuch entfernt
+- alte Telemetrie und alte Automation-Reports werden ebenfalls entfernt
+- Abbruch vor einem neuen Evidence-Write kann kein vorheriges GREEN liegen lassen
+- Runtime-Evidence wird an Repository, Git-HEAD und Maschine gebunden
+- Unreal-Telemetrie wird an genau denselben Lauf gebunden
+- kopierte Telemetrie eines anderen Laufs wird über `run_id` abgelehnt
+- veränderte Telemetrie wird über SHA-256 erkannt
+- eingebettete und echte Telemetrie müssen übereinstimmen
+- Gate prüft Freshness, Schema, Schritte, Typen und aktuellen Kontext erneut
+- manuelle Gate-Aufrufe können kein altes GREEN übernehmen
+
+### Technischer Effekt
+
+Neu ist `Scripts/cp1_runtime_evidence_contract.py` als zentrale reine Vertragslogik. Telemetrie v3 enthält `run_id`; Runtime-Evidence v3 enthält dieselbe `run_id`, den Telemetrie-SHA-256 sowie Repo-/HEAD-/Maschinenbindung.
+
+Die reale Kette lautet:
+
+```text
+purge stale artifacts
+→ generate run_id
+→ verify repo/head/machine/worktree
+→ exact UE 5.8 build
+→ launch Unreal with -CP1EvidenceRunId
+→ C++ writes telemetry v3 + run_id
+→ validate telemetry
+→ hash actual telemetry file
+→ seal Runtime Evidence v3
+→ gate reads current context + actual telemetry again
+→ validate run_id + hash + content + freshness
+→ CP1_GATE GREEN / RED / BLOCKED
+```
+
+`Scripts/run_cp1_ue58.py` ist die kanonische Ein-Befehl-Reihenfolge Readiness → Preflight → Runtime → Gate. Der GitHub-Runtime-Workflow verwendet denselben Orchestrator und listet die Contract-/Gate-Dateien explizit als Triggerpfade.
+
+Die separate Testdatei `Scripts/tests/test_cp1_runtime_evidence_contract.py` prüft unter anderem Schema-v2-Rejection, HEAD-/Maschinen-Drift, stale/future Evidence, Step-Duplikate, Bool-Returncodes, falsche Telemetrie-Schemata, Run-ID-Mismatch, Digest-/Content-Drift, Evidence-Manipulation, Positions-/Displacement-Konsistenz und das sichere Löschen alter Runtime-Artefakte.
+
+### Erwarteter Nutzen
+
+**Runtime-Evidence-Integrität:** sehr hoch  
+**No-Fake-Success:** sehr hoch  
+**Regressionserkennung:** sehr hoch  
+**Diagnosefähigkeit:** sehr hoch  
+**Codequalität:** sehr hoch  
+**Gameplay-Risiko:** keines
