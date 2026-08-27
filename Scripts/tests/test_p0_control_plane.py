@@ -262,10 +262,12 @@ class PreflightDecisionTests(unittest.TestCase):
         results[2] = self.result("quality", 1)
         self.assertIn("Quality Guard", preflight.next_action(results, False))
 
-    def test_github_failure_points_to_branch_admin(self):
+    def test_github_failure_points_to_admin_doctor(self):
         results = self.baseline()
         results[3] = self.result("github", 2)
-        self.assertIn("github_p0_admin.py --apply", preflight.next_action(results, False))
+        action = preflight.next_action(results, False)
+        self.assertIn("github_p0_admin.py --doctor", action)
+        self.assertNotIn("github_p0_admin.py --apply", action)
 
     def test_hosted_pass_points_to_ue_machine(self):
         self.assertIn("--full", preflight.next_action(self.baseline(), False))
