@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## 2026-08-27 — Dokumentations-/GitHub-Control-Plane Iteration 2
+
+### Added
+- `WICHTIG.md` als jeweils aktueller, genau einpunktiger Verbesserungsfokus.
+- `CODEQUALITÄT.md` als append-only Qualitätsjournal mit Grund, Wirkung und technischem Effekt.
+- `Scripts/repo_quality.py` als UE-unabhängiger autonomer Repository Quality Guard.
+- `Scripts/iteration_guard.py` zur technischen Durchsetzung der Iterations-Lernschleife.
+- `.github/workflows/quality-guard.yml` für PRs, `main`, manuelle Läufe und wöchentliche Vollprüfung.
+
+### Changed
+- `Docs/PROJEKTSTATUS.md` auf CURRENT-TRUTH-/P0-/Evidence-Schema synchronisiert.
+- `CONTRIBUTING.md` auf denselben Entwicklungsvertrag ausgerichtet.
+- Dokumentrollen, Definition of Done und GitHub-Gates klarer getrennt.
+
+### Automatic checks added
+- erforderliche Kern-Dokumente vorhanden
+- JSON-Dateien parsebar
+- Python-Dateien syntaktisch gültig
+- lokale Links im Dokumentations-Cockpit gültig
+- keine offensichtlichen Merge-Konfliktmarker
+- keine verbotenen generierten Ordner/Dateien
+- externe GitHub Actions nur mit vollständigem Commit-SHA
+- `WICHTIG.md` enthält genau einen aktuellen Fokus
+- `CODEQUALITÄT.md` enthält eindeutige CQ-IDs
+- bei normalen PR-Iterationen müssen `WICHTIG.md` und `CODEQUALITÄT.md` geändert werden
+- bestehender Inhalt von `CODEQUALITÄT.md` darf nur erweitert, nicht umgeschrieben werden
+
+### Current P0
+- `main` Branch-Protection/Ruleset aktivieren.
+- `Validate` und `Quality Guard` als Required Checks setzen.
+- Self-hosted UE-5.8-Runner registrieren und prüfen.
+- `UE58_RUNNER_ENABLED=true` erst nach erfolgreicher Runner-Bereitschaft setzen.
+
+### Evidence state
+- Headless/static verification: verfügbar
+- GitHub Quality Guard: neu integriert, CI-Nachweis steht für den aktuellen Head aus
+- UE-5.8 Runtime: weiterhin `UNOBSERVED/BLOCKED`
+- kein Runtime-PASS behauptet
+
+---
+
 ## 2026-08-27 — GitHub CP1 Control Plane
 - Repository-Baseline aus v8.3-Paket bereinigt; generierte Logs/Caches ausgeschlossen.
 - Unreal Game-/Editor-Targets und Primary Game Module ergänzt.
@@ -53,7 +94,6 @@
 - packaged build
 - crowd/rival simulation
 - auto playtester
-
 
 ## 0.3.1-alpha-prep — 2026-08-27
 
