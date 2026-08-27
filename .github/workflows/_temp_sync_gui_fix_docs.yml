@@ -1,0 +1,103 @@
+name: TEMP Sync GUI Fix Docs
+
+on:
+  push:
+    branches:
+      - fix/gui-prepost-contract
+
+permissions:
+  contents: write
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/gui-prepost-contract
+          fetch-depth: 0
+
+      - name: Synchronize project truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          status_path = Path("Docs/PROJEKTSTATUS.md")
+          status = status_path.read_text(encoding="utf-8")
+
+          replacements = [
+              (
+                  "**Aktueller Checkpoint:** P0 Runner Bootstrap → CP1 Runtime  \n**Arbeitszweig:** `infra/ue58-runner-bootstrap-acceptance`",
+                  "**Aktueller Checkpoint:** Environment Doctor Fix → P0 Runner Bootstrap → CP1 Runtime  \n**Arbeitszweig:** `fix/gui-prepost-contract`",
+              ),
+              (
+                  "| CP1 Runtime Evidence Contract v3 | 🟢 IMPLEMENTIERT + HOSTED GEPRÜFT | Run-ID, Kontextbindung, Telemetrie-Datei, Hash, Freshness |\n| Runner Bootstrap Acceptance |",
+                  "| CP1 Runtime Evidence Contract v3 | 🟢 IMPLEMENTIERT + HOSTED GEPRÜFT | Run-ID, Kontextbindung, Telemetrie-Datei, Hash, Freshness |\n| Environment Doctor Contract v2 | 🟢 IMPLEMENTIERT — HOSTED-ABNAHME OFFEN | explizites before/after, defensive GUI, Regression gegen KeyError `after` |\n| Runner Bootstrap Acceptance |",
+              ),
+              (
+                  "PR #7 `infra: bind CP1 runtime GREEN to the real Unreal run` ist gemergt.\n\n`main` danach:\n\n```text\nb6109c60d544a55091bcfcb8ef106eeeb5f012c8\n```\n\nDie laufende Iteration `infra/ue58-runner-bootstrap-acceptance` fügt **keine Gameplay-Funktion** hinzu. Sie schließt die Beweislücke zwischen „lokale Maschine ist bereit“ und „GitHub hat einen passenden Self-hosted Runner tatsächlich registriert, erreicht und für einen Job eingesetzt“.",
+                  "PR #8 `infra: prove UE 5.8 runner through server-mediated bootstrap` ist gemergt.\n\n`main` danach:\n\n```text\n3b540300421ea96bfc6b61c5cae96010da6218b1\n```\n\nDie laufende Iteration `fix/gui-prepost-contract` reagiert auf einen **realen Nutzerlauf** des ausgelieferten ZIPs. `START_BUNKER_BEATS_INTELLIGENT.sh` erreichte die Environment-Prüfung, danach brach die Tkinter-Darstellung mit `KeyError: 'after'` ab. Ursache war Contract-Drift zwischen `EnvironmentAssistant.run()` und `repair_gui.py`; Gameplay oder CP1-Runtime waren daran nicht beteiligt.",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in status:
+                  raise SystemExit(f"expected project-status text not found: {old[:80]!r}")
+              status = status.replace(old, new, 1)
+
+          status_path.write_text(status, encoding="utf-8")
+
+          changelog_path = Path("Docs/CHANGELOG.md")
+          changelog = changelog_path.read_text(encoding="utf-8")
+          marker = "## 2026-08-27 — Environment Doctor Pre/Post Contract Hardening"
+          if marker not in changelog:
+              block = '''# CHANGELOG
+
+## 2026-08-27 — Environment Doctor Pre/Post Contract Hardening
+
+### Fixed
+- realen Startfehler `KeyError: 'after'` in `Launcher/gui/repair_gui.py` strukturell behoben.
+- GUI erwartet keine ungeprüften verschachtelten Payload-Felder mehr.
+- Worker- und Darstellungsfehler beenden den Tkinter-Polling-Callback nicht mehr dauerhaft.
+- parallele Mehrfachstarts werden während einer laufenden Prüfung blockiert.
+
+### Added
+- `Launcher/core/environment_contract.py` als versionierter Summary-/Finding-Vertrag mit Schema v2.
+- explizite `before`- und `after`-Phasen für Vorprüfung und Nachvalidierung.
+- `Scripts/tests/test_environment_gui_contract.py` mit Regressionen für aktuelle, Legacy-, fehlende und fehlerhafte Payloads.
+
+### Changed
+- `EnvironmentAssistant.run()` bestimmt den Gesamtstatus aus der echten Nachvalidierung.
+- `diagnostics.py` und `regression_knowledge.py` erzeugen Speicherordner erst beim tatsächlichen Schreiben statt beim Import.
+- Repository Quality Guard schützt Contract, Assistant, GUI und Regressionstest als Pflichtdateien.
+- `WICHTIG.md` auf W-2026-08-27-012 aktualisiert.
+- `CODEQUALITÄT.md` append-only um CQ-2026-08-27-012 erweitert.
+
+### Evidence state
+- Fehlerursache aus realem Nutzerlauf bestätigt.
+- Code-/Regression-Fix implementiert; Hosted-CI-Abnahme des aktuellen Branches noch offen.
+- Unreal Engine 5.8 wurde im gemeldeten lokalen Lauf nicht gefunden; dieser Zustand bleibt eine Voraussetzung und ist kein GUI-Fehler.
+- echter CP1 Runtime-Lauf weiterhin `UNOBSERVED/BLOCKED`.
+
+---
+
+'''
+              if not changelog.startswith("# CHANGELOG\n"):
+                  raise SystemExit("unexpected changelog header")
+              changelog = block + changelog[len("# CHANGELOG\n\n"):]
+              changelog_path.write_text(changelog, encoding="utf-8")
+          PY
+
+          if git diff --quiet -- Docs/PROJEKTSTATUS.md Docs/CHANGELOG.md; then
+            echo "Documentation already synchronized."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Docs/PROJEKTSTATUS.md Docs/CHANGELOG.md
+          git commit -m "docs: record environment doctor GUI contract fix"
+          git push origin HEAD:refs/heads/fix/gui-prepost-contract
