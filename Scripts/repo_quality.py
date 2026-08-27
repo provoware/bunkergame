@@ -22,7 +22,11 @@ REQUIRED_FILES = (
     "Docs/TODO.md",
     "Docs/PROJEKTSTATUS.md",
     "Docs/CHANGELOG.md",
+    "Launcher/core/environment_contract.py",
+    "Launcher/core/assistant.py",
+    "Launcher/gui/repair_gui.py",
     "Scripts/ci_verify.py",
+    "Scripts/tests/test_environment_gui_contract.py",
 )
 
 COCKPIT_MARKDOWN = (
