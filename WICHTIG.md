@@ -2,88 +2,97 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-005 — Nach Merge nie still auf demselben Feature-Branch weiterentwickeln
+## W-2026-08-27-006 — Branch-Protection-Fehler selbst diagnostizieren statt nur abbrechen
 
-**Kategorie:** Git-Workflow / Prozessintegrität / Fehlerprävention  
+**Kategorie:** GitHub-Administration / Diagnose / Laienführung  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT — als read-only Guard + Regressionstest  
-**Nutzen:** 9/10  
-**Aufwand:** 2/10  
+**Status:** 🟢 IMPLEMENTIERT — reale Admin-Ausführung weiterhin extern erforderlich  
+**Nutzen:** 10/10  
+**Aufwand:** 3/10  
 **Risiko der Umsetzung:** 1/10
 
 ### Beobachtung
 
-PR #1 wurde bereits gemergt, während danach noch weitere Änderungen auf demselben Feature-Branch entstanden. Diese Commits gehörten dadurch nicht mehr zum bereits abgeschlossenen PR und erhielten zunächst keinen neuen PR-/CI-Lifecycle.
+GitHub meldete serverseitig weiterhin `main.protected=false`, obwohl der sichere Apply-Ablauf bereits vorbereitet war. Der bisherige Assistent prüfte vor dem Schreiben nur, ob `gh` installiert und angemeldet ist. Er prüfte noch nicht explizit, ob das angemeldete Konto für **genau `provoware/bunkergame`** tatsächlich Repository-Adminrechte besitzt.
 
-Das ist kein Codefehler, aber eine relevante Prozessschwachstelle: Ein bereits gemergter Branch kann optisch wie ein weiterhin aktiver Arbeitszweig wirken, obwohl die neue Arbeit außerhalb des abgeschlossenen Review-Gates liegt.
+Bei Fehlern wurden 403, 404 und 422 außerdem nur als allgemeines Scheitern ausgegeben. Für Laien war damit nicht klar, ob Berechtigung, falscher Repository-/Branch-Kontext oder eine ungültige GitHub-Konfiguration die Ursache war.
 
 ### Verbesserungsvorschlag
 
-Ein read-only Branch-Lifecycle-Gate vor die technische P0-Prüfung setzen:
+Vor jeder Adminänderung eine read-only Fähigkeitsprüfung ausführen:
 
 ```text
-Arbeitsbranch bestimmen
-→ GitHub nach bereits gemergten PRs dieses Branches fragen
-→ Commits vor origin/main bestimmen
-→ wenn bereits gemergt + neue Commits vorhanden:
-   FAIL
-   → neuen Branch vom aktuellen main verlangen
+gh vorhanden
+→ gh angemeldet
+→ Repository exakt bestätigt
+→ Repository nicht archiviert
+→ permissions.admin == true
+→ main existiert
+→ aktuellen protected-Serverhinweis anzeigen
+→ erst dann Apply erlauben
+```
+
+Fehler werden anschließend eindeutig klassifiziert:
+
+```text
+403 → Berechtigung / Token
+404 → Repository / Branch / Ressource
+422 → Konfiguration von GitHub abgelehnt
+sonst → unbekannter GitHub-Fehler
 ```
 
 ### Umgesetzt
 
-- `Scripts/branch_lifecycle_guard.py` ergänzt.
-- das Skript verändert weder Git noch GitHub.
-- `main` wird nicht als Feature-Branch-Reuse gewertet.
-- bereits gemergter Feature-Branch mit neuen Commits wird blockiert.
-- noch nie gemergter oder aktuell offener Arbeitsbranch bleibt zulässig.
-- fehlende GitHub-CLI-/Auth-Daten erzeugen `BLOCKED`, keinen erfundenen PASS.
-- der Guard wurde als **erste Stufe** in `Scripts/p0_preflight.py` aufgenommen.
-- Regressionstests decken main, merged+ahead, merged+0, nie gemergt und ungültige PR-Antwort ab.
-
-### Grund
-
-Ein Review-/CI-Prozess ist nur belastbar, wenn neue Arbeit nach einem Merge wieder einen neuen nachvollziehbaren Branch-/PR-Zyklus erhält. Sonst können Folgeänderungen versehentlich außerhalb des erwarteten Gate-Lebenszyklus landen.
+- `github_p0_admin.py --doctor` ergänzt.
+- Repository-Adminrecht wird aus der authentifizierten Repository-Antwort geprüft.
+- Maintain-/Push-Rechte werden ausdrücklich nicht als Adminrecht akzeptiert.
+- falscher Repository-Kontext wird blockiert.
+- archiviertes Repository wird blockiert.
+- Zielbranch `main` wird vor dem Schreiben bestätigt.
+- aktueller Serverhinweis `main.protected=true/false` wird angezeigt.
+- 403/404/422 erhalten eigene Diagnosecodes und konkrete nächste Schritte.
+- Apply und Runner-Variable verwenden dieselbe Fehlerklassifizierung.
+- `github_p0_status.py` liest zuerst den normalen Branch-Endpunkt und meldet `protected=false` eindeutig ohne Detail-API.
+- erst bei `protected=true` wird die vollständige Branch-Protection-Konfiguration als Beweis geprüft.
+- neue Regressionstests decken Adminrecht, Maintain-only, falsches Repository, 403/404/422 und Protected-Hinweise ab.
 
 ### Erwartete Wirkung
 
-- keine stillen Nacharbeiten auf bereits abgeschlossenen Feature-Branches
-- sauberere PR-Historie
-- jede Iteration erhält wieder einen eigenen prüfbaren Lifecycle
-- weniger Verwechslung zwischen gemergtem Stand und neuer Arbeit
-- bessere Grundlage für Branch Protection und Required Checks
+- deutlich weniger Rätselraten bei GitHub-Adminfehlern
+- keine Apply-Versuche mit nur Maintain-/Push-Rechten
+- schneller Unterschied zwischen Rechteproblem und Payload-Problem
+- unabhängigerer Servernachweis über `protected`
+- bessere Laienführung ohne Abschwächung des Sicherheitsgates
 
 ### Technischer Effekt
 
-Der P0-Preflight beginnt jetzt mit:
-
 ```text
-BRANCH_LIFECYCLE
-→ static
-→ quality
-→ GitHub branch gate
-→ optional UE58 readiness
+GITHUB_ADMIN_PREFLIGHT
+→ capability PASS/BLOCKED
+→ APPLY nur bei PASS
+→ serverseitiges Read-back
+→ GITHUB_P0_BRANCH_GATE PASS/FAIL
 ```
-
-Ein Branch-Lifecycle-FAIL hat bewusst Vorrang vor allen nachfolgenden technischen Prüfungen.
 
 ### Aktueller belegter Zustand
 
 - PR #1: gemergt
-- Folgebranch: `infra/p0-postmerge-hardening`
-- Branch-Lifecycle-Guard: implementiert
-- Regressionstests: implementiert
-- Branch Protection `main`: weiterhin extern offen
-- Self-hosted UE-5.8 Runner: weiterhin extern offen
-- CP1 Runtime: weiterhin `UNOBSERVED/BLOCKED`
+- PR #3: gemergt
+- `main`: serverseitig zuletzt `protected=false`
+- Admin-Diagnose: implementiert
+- neue Regressionstests: implementiert
+- reale Admin-Ausführung: extern offen
+- Self-hosted UE-5.8 Runner: extern offen
+- CP1 Runtime: `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
-- Folge-PR gegen `main` offen ist
-- `static-and-contract` PASS ist
-- `repository-quality` PASS ist
-- Iteration Guard den neuen W-/CQ-Eintrag akzeptiert
-- die Nacharbeiten ausschließlich über den neuen Folge-PR integriert werden
+- Hosted `static-and-contract` PASS ist
+- Hosted `repository-quality` PASS ist
+- `python3 Scripts/github_p0_admin.py --doctor` auf dem Admin-Rechner `GITHUB_ADMIN_PREFLIGHT: PASS` meldet
+- `--apply` erfolgreich schreibt
+- `github_p0_status.py` anschließend `main.protected=true` und beide Required Checks bestätigt
+- `GITHUB_P0_BRANCH_GATE: PASS` serverseitig erreicht ist
 
 ### Detailanleitung
 
