@@ -62,7 +62,10 @@ def next_action(results: list[StepResult], include_readiness: bool) -> str:
     if failed(results, "quality"):
         return "Quality Guard zuerst reparieren: python3 Scripts/repo_quality.py"
     if failed(results, "github"):
-        return "main schützen: python3 Scripts/github_p0_admin.py --apply"
+        return (
+            "GitHub-Adminfähigkeit zuerst read-only prüfen: "
+            "python3 Scripts/github_p0_admin.py --doctor; erst nach PASS Branch Protection anwenden."
+        )
     if not include_readiness:
         return "Auf der UE-5.8-Maschine fortsetzen: python3 Scripts/p0_preflight.py --full"
     if failed(results, "readiness"):
