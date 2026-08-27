@@ -2,103 +2,115 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-007 — GitHub-Schutz über unabhängig lesbares Ruleset beweisen
+## W-2026-08-27-008 — Infrastruktur-Evidence an Live-`main` und Ruleset-Drift binden
 
-**Kategorie:** Evidence Integrity / GitHub Rulesets / Robustheit / Codequalität  
+**Kategorie:** Evidence Integrity / Drift Detection / GitHub Infrastructure  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT — reales Ruleset auf GitHub noch anzuwenden  
+**Status:** 🟢 IMPLEMENTIERT — reales Ruleset und damit echter PASS weiterhin offen  
 **Nutzen:** 10/10  
 **Aufwand:** 4/10  
 **Risiko der Umsetzung:** 2/10
 
 ### Beobachtung
 
-Die klassische Branch-Protection kann korrekt funktionieren, ihr Detail-Endpunkt ist für manche GitHub-Integrationen aber nicht lesbar. Dadurch entsteht ein ungünstiger Zustand: Der Schutz kann auf dem Admin-Rechner gesetzt werden, während eine unabhängige zweite Stelle die vollständige Konfiguration wegen eines 403 nicht nachprüfen kann.
+Ein tokenfreier Live-Check beweist den aktuellen GitHub-Zustand sehr gut, hinterlässt aber ohne zusätzliche Struktur nur eine Konsolenausgabe. Für spätere Fehleranalyse, Release-Abnahme und automatische Drift-Erkennung fehlt damit ein maschinenlesbarer Beleg, der eindeutig sagt, **welcher `main`-Commit**, **welches Ruleset** und **welcher Vertragszustand** tatsächlich beobachtet wurden.
+
+Eine gespeicherte JSON-Datei allein wäre wiederum zu schwach: Sie könnte veraltet sein, nachträglich verändert werden oder nach einem neuen `main`-Commit weiter wie gültige Evidence aussehen.
 
 ### Verbesserungsvorschlag
 
-Den P0-Schutz bevorzugt als **Repository Ruleset** abbilden. Rulesets sind laut GitHub bereits mit Repository-Lesezugriff sichtbar. Dadurch kann der vollständige Serverzustand nach dem einmaligen Admin-Apply unabhängig nachgeprüft werden.
+Den öffentlichen Live-Beweis zu einer zweistufigen Evidence-Kette erweitern:
 
 ```text
-Admin-Rechner
-→ --doctor
-→ --apply-ruleset
-→ GitHub speichert aktives Ruleset
+LIVE GITHUB
+→ main SHA lesen
+→ Ruleset-ID + Detail lesen
+→ P0-Contract validieren
+→ JSON-Evidence erzeugen
+→ Integritäts-Hash bilden
 
-Unabhängige Prüfung
-→ GET /repos/provoware/bunkergame/rulesets
-→ Ruleset-ID bestimmen
-→ vollständiges Ruleset lesen
-→ gemeinsamer Contract-Validator
-→ P0 PASS/FAIL
+GESPEICHERTE EVIDENCE
+→ Schema + Repository + Branch prüfen
+→ Freshness prüfen
+→ SHA-256-Integrität prüfen
+→ GitHub erneut live lesen
+→ main SHA muss noch identisch sein
+→ Ruleset-ID muss noch identisch sein
+→ Contract muss erneut PASS sein
+→ erst dann GITHUB_P0_EVIDENCE: PASS
 ```
 
 ### Grund
 
-Ein Beweis ist stärker, wenn seine Prüfung nicht dieselbe privilegierte Schnittstelle benötigt wie seine Erzeugung. Das Ruleset trennt daher **Schreiben mit Adminrecht** von **Lesen/Prüfen mit Read-Zugriff**. So wird die Infrastruktur-Evidence reproduzierbarer und weniger abhängig von einem einzelnen Token oder GitHub-App-Berechtigungsprofil.
+Ein belastbarer Infrastrukturbeweis braucht sowohl **Nachvollziehbarkeit** als auch **Gegenwartsbezug**. Der gespeicherte Datensatz erklärt, was beobachtet wurde; die erneute Live-Abfrage verhindert, dass ein alter oder kopierter PASS als aktueller Serverzustand verwendet wird.
+
+Der SHA-256-Hash ist dabei ausdrücklich nur eine lokale Integritätsprüfung gegen versehentliche Veränderung. Er ist **keine GitHub-Signatur** und ersetzt niemals die zweite Live-Abfrage.
 
 ### Umgesetzt
 
-- `Scripts/github_p0_ruleset.py` als zentrale, reine Vertragslogik ergänzt.
-- ein einziger kanonischer Ruleset-Payload verhindert Drift zwischen Admin-, Status- und Testlogik.
-- Ruleset zielt ausschließlich auf `refs/heads/main`.
-- Enforcement muss exakt `active` sein; `evaluate` zählt niemals als realer Schutz.
-- Pull Request vor Integration ist verpflichtend.
-- Solo-Repository bleibt mit `required_approving_review_count=0` bedienbar.
-- offene Review-Diskussionen müssen gelöst sein.
-- `static-and-contract` und `repository-quality` sind Required Checks.
-- Branch muss vor Merge aktuell sein.
-- `deletion` blockiert das Löschen von `main`.
-- `non_fast_forward` blockiert Force-Push.
-- unerwartete Bypass-Akteure führen zu FAIL.
-- `cp1-runtime` bleibt bis zum stabilen echten UE-Runner bewusst nicht global required.
-- `github_p0_admin.py --apply-ruleset` arbeitet als sicheres Upsert: vorhandenes Soll-Ruleset aktualisieren, sonst neu anlegen; Duplikate blockieren.
-- nach jedem Write erfolgt serverseitiges Read-back mit demselben Contract-Validator.
-- `github_p0_status.py` prüft Rulesets zuerst und fällt nur bei Bedarf auf klassische Branch Protection zurück.
-- Hosted Regressionstests prüfen aktive/unechte Enforcement-Zustände, Required Checks, Strictness, Force-Push/Delete-Sperre, Bypass und Duplikate.
+- `Scripts/github_p0_evidence.py` sammelt tokenfrei Live-Daten und schreibt ein versioniertes JSON-Bundle.
+- Evidence enthält Repository, Branch, aktuellen `main`-SHA, Ruleset-ID, Enforcement, Contract-Status, Fehlerliste, Quellen und Beobachtungszeit.
+- FAIL-Zustände werden ebenfalls als Diagnose-Bundle geschrieben.
+- Evidence wird mit SHA-256 versiegelt; nachträgliche lokale Änderungen werden erkannt.
+- `Scripts/github_p0_evidence_validate.py` prüft Schema, Typ, Repository, Branch, Freshness, Status, Quellendpunkte und Integritäts-Hash.
+- gespeicherter PASS reicht technisch nicht: der Validator führt immer eine neue öffentliche GitHub-Abfrage aus.
+- ein veränderter `main`-SHA invalidiert die vorhandene Evidence automatisch.
+- geänderte Ruleset-ID oder Ruleset-Konfiguration werden als Drift erkannt.
+- maximale Evidence-Altersgrenze: 36 Stunden.
+- neue Regressionstests prüfen PASS-Bundle, fehlendes Ruleset, Manipulation, Stale-Evidence, falsches Repository, `main`-Drift, Ruleset-ID-Drift und Contract-Drift.
+- `P0 Infrastructure Observer` lädt das JSON-Bundle auch bei FAIL als GitHub-Actions-Artefakt hoch und setzt den Job erst danach rot.
+- `actions/upload-artifact` ist auf einen vollständigen Commit-SHA gepinnt.
 
 ### Erwartete Wirkung
 
-- unabhängigere und leichter reproduzierbare Infrastruktur-Evidence
-- weniger Abhängigkeit vom klassischen Protection-Detail-Endpunkt
-- kein Unterschied zwischen Soll-Payload und Prüfvertrag
-- weniger duplizierte GitHub-Regellogik
-- eindeutige Anti-Fake-Regeln für Testfixtures
-- bessere Wartbarkeit durch zentrales Contract-Modul
+- nachvollziehbare Infrastruktur-Evidence statt flüchtiger Terminalausgabe
+- automatische Invalidierung alter Evidence nach Änderungen an `main`
+- Drift-Erkennung bei Ruleset-Änderungen
+- bessere Fehleranalyse durch gespeicherte FAIL-Bundles
+- reproduzierbare Release-/P0-Abnahme
+- klare Trennung zwischen Integritäts-Hash und echter Live-Authentizität
+- deutlich geringeres Risiko eines versehentlich wiederverwendeten alten PASS
 
 ### Technischer Effekt
 
 ```text
-P0 RULESET CONTRACT
-→ canonical payload
-→ safe upsert
-→ live server read-back
-→ same evaluator
-→ independent read-only verification
-```
+COLLECT
+→ live GitHub
+→ evidence.json
+→ SHA-256 seal
 
-Testdateien dürfen den Evaluator prüfen, aber nie einen Live-Server-PASS ersetzen. Ein echtes P0-Ruleset-PASS entsteht nur aus einer von GitHub gelesenen aktiven Ruleset-Konfiguration.
+VALIDATE
+→ stored contract
+→ freshness
+→ integrity
+→ live GitHub re-check
+→ main-SHA binding
+→ ruleset binding
+→ P0 contract re-check
+→ PASS / DRIFT / FAIL
+```
 
 ### Aktueller belegter Zustand
 
-- GitHub-Ruleset-Liste serverseitig aktuell leer (`[]`)
-- `main` serverseitig weiterhin ungeschützt
-- Repository-Rolle der verbundenen Identität: `admin=true`
-- Ruleset-Contract und Apply-/Verify-Pfad: implementiert
-- Anti-Fake-Regressionstests: implementiert
-- reales Ruleset: noch nicht angewendet
+- PR #4 mit Ruleset-/Public-Verify-Schicht: gemergt
+- `main` nach PR #4: `deba9c92f0ff7d36b1c62b420ef5c450b93157eb`
+- Evidence-Collector: implementiert
+- Evidence-Live-Validator: implementiert
+- Observer-Artefaktpfad: implementiert
+- Regressionstests: implementiert
+- reales GitHub-P0-Ruleset: weiterhin noch nicht angewendet
+- echter Infrastruktur-PASS: daher weiterhin offen
 - Self-hosted UE-5.8 Runner: weiterhin offen
 - CP1 Runtime: `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
 - Hosted `static-and-contract` PASS ist
-- Hosted `repository-quality` PASS ist
-- `python3 Scripts/github_p0_admin.py --doctor` PASS meldet
-- `python3 Scripts/github_p0_admin.py --apply-ruleset` das aktive Ruleset serverseitig anlegt
-- der Ruleset-Endpunkt das vollständige Soll unabhängig lesbar zurückliefert
-- `github_p0_status.py` `GITHUB_P0_EVIDENCE_PATH: RULESET` und `GITHUB_P0_BRANCH_GATE: PASS` meldet
+- Hosted `repository-quality` inklusive neuer Evidence-Regressionstests PASS ist
+- ein reales aktives P0-Ruleset auf GitHub vorhanden ist
+- der Observer ein PASS-Bundle erzeugt und hochlädt
+- `github_p0_evidence_validate.py` dasselbe Bundle gegen den weiterhin aktuellen Live-Serverzustand mit `GITHUB_P0_EVIDENCE: PASS` bestätigt
 
 ### Detailanleitung
 
-Siehe `Docs/GITHUB_P0_SETUP.md`, `Docs/GITHUB_ADMIN_DIAGNOSE.md` und Issue #2.
+Siehe `Docs/GITHUB_P0_SETUP.md`, `Docs/PROJEKTSTATUS.md`, Issue #2 und das Evidence-Bundle aus `P0 Infrastructure Observer`.
