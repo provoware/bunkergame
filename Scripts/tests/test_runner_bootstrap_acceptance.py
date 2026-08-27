@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -13,7 +14,9 @@ SCRIPTS = ROOT / "Scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+import github_p0_admin as admin
 import github_runner_bootstrap_public_verify as public
+import p0_preflight as preflight
 import runner_bootstrap_contract as contract
 
 
@@ -140,6 +143,79 @@ class PublicRunnerBootstrapVerifierTests(RunnerBootstrapContractTests):
         ok, detail, _ = public.verify_public_runner_bootstrap(now=self.NOW)
         self.assertFalse(ok)
         self.assertIn("nicht erfolgreich", detail)
+
+
+class RunnerActivationGateTests(unittest.TestCase):
+    SHA = "a" * 40
+
+    def setUp(self):
+        self.original_bootstrap = admin.verify_public_runner_bootstrap
+        self.original_repo = admin.current_repository_identity
+        self.original_head = admin.current_git_head
+        self.original_clean = admin.git_worktree_clean
+        self.original_run = admin.run
+        self.calls: list[list[str]] = []
+
+        admin.verify_public_runner_bootstrap = lambda: (
+            True,
+            "server bootstrap pass",
+            {"main_sha": self.SHA, "run_id": 1234, "runner_name": "ue58-linux-01"},
+        )
+        admin.current_repository_identity = lambda root: (admin.EXPECTED_REPOSITORY, "ok")
+        admin.current_git_head = lambda root: (self.SHA, "ok")
+        admin.git_worktree_clean = lambda root: (True, "clean")
+
+        def fake_run(args, **kwargs):
+            self.calls.append(list(args))
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+        admin.run = fake_run
+
+    def tearDown(self):
+        admin.verify_public_runner_bootstrap = self.original_bootstrap
+        admin.current_repository_identity = self.original_repo
+        admin.current_git_head = self.original_head
+        admin.git_worktree_clean = self.original_clean
+        admin.run = self.original_run
+
+    def test_activation_checkout_must_match_public_main(self):
+        admin.current_git_head = lambda root: ("b" * 40, "ok")
+        ok, detail = admin.validate_activation_checkout(self.SHA)
+        self.assertFalse(ok)
+        self.assertIn("aktuellem main", detail)
+
+    def test_activation_checkout_must_be_clean(self):
+        admin.git_worktree_clean = lambda root: (False, "dirty")
+        ok, detail = admin.validate_activation_checkout(self.SHA)
+        self.assertFalse(ok)
+        self.assertIn("nicht sauber", detail)
+
+    def test_runner_variable_write_requires_public_bootstrap_proof(self):
+        admin.set_runner_variable()
+        self.assertTrue(any(call[:3] == ["gh", "variable", "set"] for call in self.calls))
+
+    def test_missing_public_bootstrap_blocks_before_variable_write(self):
+        admin.verify_public_runner_bootstrap = lambda: (False, "no current bootstrap", None)
+        with self.assertRaises(RuntimeError):
+            admin.set_runner_variable()
+        self.assertEqual(self.calls, [])
+
+
+class PreflightBootstrapDecisionTests(unittest.TestCase):
+    def result(self, step, code: int):
+        return preflight.StepResult(step, code)
+
+    def baseline(self):
+        return [self.result(step, 0) for step in preflight.BASE_STEPS]
+
+    def test_full_preflight_blocks_activation_when_server_bootstrap_is_missing(self):
+        results = self.baseline() + [
+            self.result(preflight.BOOTSTRAP_STEP, 2),
+            self.result(preflight.READINESS_STEP, 0),
+        ]
+        action = preflight.next_action(results, True)
+        self.assertIn("Runner Bootstrap Acceptance", action)
+        self.assertNotIn("enable-runner-variable", action)
 
 
 class RunnerBootstrapWorkflowStaticTests(unittest.TestCase):
