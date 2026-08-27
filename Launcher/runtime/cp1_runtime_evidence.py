@@ -3,87 +3,105 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import json
-import os
 import platform
 import shutil
 import subprocess
 import sys
+import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-REPORT_DIR = ROOT / "Diagnostics/Runtime"
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
-TELEMETRY = ROOT / "Saved/Automation/CP1_RuntimeTelemetry.json"
+SCRIPTS = ROOT / "Scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+from cp1_runtime_evidence_contract import (
+    KIND,
+    SCHEMA_VERSION,
+    TELEMETRY_RELATIVE_PATH,
+    seal_runtime_evidence,
+    telemetry_digest,
+    validate_telemetry,
+)
+from runner_identity import (
+    EXPECTED_REPOSITORY,
+    current_git_head,
+    current_repository_identity,
+    git_worktree_clean,
+    machine_fingerprint,
+)
+from runner_readiness import locate_engine, read_engine_version
+
+REPORT_DIR = ROOT / "Diagnostics" / "Runtime"
+OUTPUT = REPORT_DIR / "CP1_runtime_evidence.json"
+AUTOMATION_REPORT_DIR = REPORT_DIR / "CP1"
+TELEMETRY = ROOT / TELEMETRY_RELATIVE_PATH
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def run(cmd, cwd=ROOT, timeout=3600):
     argv = [str(x) for x in cmd]
     if argv and platform.system() == "Windows" and argv[0].lower().endswith((".bat", ".cmd")):
         argv = ["cmd.exe", "/d", "/s", "/c", *argv]
-    proc = subprocess.run(argv, cwd=cwd, text=True, capture_output=True, timeout=timeout)
-    return {
-        "returncode": proc.returncode,
-        "stdout": proc.stdout[-30000:],
-        "stderr": proc.stderr[-30000:],
-    }
+    try:
+        proc = subprocess.run(argv, cwd=cwd, text=True, capture_output=True, timeout=timeout)
+        return {
+            "returncode": proc.returncode,
+            "stdout": proc.stdout[-30000:],
+            "stderr": proc.stderr[-30000:],
+            "launched": True,
+            "timed_out": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+        return {
+            "returncode": 124,
+            "stdout": stdout[-30000:],
+            "stderr": (stderr + f"\nTIMEOUT after {timeout}s")[-30000:],
+            "launched": True,
+            "timed_out": True,
+        }
+    except OSError as exc:
+        return {
+            "returncode": 127,
+            "stdout": "",
+            "stderr": f"process launch failed: {exc}",
+            "launched": False,
+            "timed_out": False,
+        }
+
+
+def purge_stale_runtime_artifacts() -> tuple[bool, list[str]]:
+    failures: list[str] = []
+    for path in (OUTPUT, TELEMETRY):
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError as exc:
+            failures.append(f"stale artifact could not be removed: {path}: {exc}")
+    try:
+        if AUTOMATION_REPORT_DIR.exists():
+            shutil.rmtree(AUTOMATION_REPORT_DIR)
+    except OSError as exc:
+        failures.append(f"stale automation report could not be removed: {AUTOMATION_REPORT_DIR}: {exc}")
+    return not failures, failures
 
 
 def discover_ue():
-    roots = []
-    env = os.environ.get("UE_ROOT")
-    if env:
-        roots.append(Path(env).expanduser())
-    roots.extend(
-        [
-            Path(r"C:\Program Files\Epic Games\UE_5.8"),
-            Path(r"D:\Program Files\Epic Games\UE_5.8"),
-            Path("/opt/UnrealEngine"),
-            Path("/opt/Epic Games/UE_5.8"),
-            Path.home() / ".local/UnrealEngine",
-        ]
-    )
-    for root in roots:
-        if not root.exists():
-            continue
-        uat = next((p for p in [root / "Engine/Build/BatchFiles/RunUAT.sh", root / "Engine/Build/BatchFiles/RunUAT.bat"] if p.exists()), None)
-        editor = next(
-            (
-                p
-                for p in [
-                    root / "Engine/Binaries/Linux/UnrealEditor-Cmd",
-                    root / "Engine/Binaries/Linux/UnrealEditor",
-                    root / "Engine/Binaries/Win64/UnrealEditor-Cmd.exe",
-                    root / "Engine/Binaries/Win64/UnrealEditor.exe",
-                ]
-                if p.exists()
-            ),
-            None,
-        )
-        version_file = root / "Engine/Build/Build.version"
-        version = None
-        if version_file.exists():
-            try:
-                version_data = json.loads(version_file.read_text(encoding="utf-8"))
-                version = f"{version_data.get('MajorVersion')}.{version_data.get('MinorVersion')}"
-            except Exception:
-                version = None
-        build = next(
-            (
-                p
-                for p in [
-                    root / "Engine/Build/BatchFiles/Build.bat",
-                    root / "Engine/Build/BatchFiles/Linux/Build.sh",
-                ]
-                if p.exists()
-            ),
-            None,
-        )
-        if uat and editor and build and version == "5.8":
-            return {"root": str(root), "uat": str(uat), "editor": str(editor), "build": str(build), "version": version}
-    return None
+    engine_root, editor, build_script = locate_engine()
+    version_ok, version_data, version_detail = read_engine_version(engine_root)
+    if not version_ok or engine_root is None or editor is None or build_script is None:
+        return None
+    return {
+        "root": str(engine_root),
+        "editor": str(editor),
+        "build": str(build_script),
+        "version": version_detail,
+        "version_raw": version_data,
+    }
 
 
 def toolchain_snapshot():
@@ -96,7 +114,7 @@ def toolchain_snapshot():
         "clang": clang,
         "clang20": clang20,
     }
-    for name, path in [("clang", clang), ("clang20", clang20)]:
+    for name, path in (("clang", clang), ("clang20", clang20)):
         if path:
             result = run([path, "--version"], timeout=20)
             data[name + "_version_output"] = result["stdout"]
@@ -108,60 +126,87 @@ def toolchain_snapshot():
     return data
 
 
-def load_telemetry():
-    if not TELEMETRY.exists():
-        return None, "telemetry file missing"
+def load_telemetry(expected_run_id: str):
+    if not TELEMETRY.is_file():
+        return None, None, "telemetry file missing"
     try:
-        data = json.loads(TELEMETRY.read_text(encoding="utf-8"))
-    except Exception as exc:
-        return None, f"telemetry JSON invalid: {exc}"
-    required = {
-        "schema",
-        "frame_samples",
-        "frame_time_ms_avg",
-        "position_before",
-        "position_after",
-        "velocity",
-        "speed_cm_s",
-        "displacement_cm",
-        "movement_component",
-    }
-    missing = sorted(required - set(data))
-    if missing:
-        return None, f"telemetry fields missing: {', '.join(missing)}"
-    if data.get("schema") != "bunkerbeats.cp1.movement.telemetry.v2":
-        return None, f"unexpected telemetry schema: {data.get('schema')}"
-    if (data.get("frame_samples") or 0) <= 0 or (data.get("frame_time_ms_avg") or 0) <= 0:
-        return None, "frame telemetry is not positive"
-    if (data.get("displacement_cm") or 0) <= 0.01:
-        return None, "movement displacement is not above threshold"
-    if not (data.get("movement_component") or {}).get("valid"):
-        return None, "movement component evidence is invalid"
-    return data, None
+        raw = TELEMETRY.read_bytes()
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return None, None, f"telemetry file invalid: {exc}"
+
+    valid, failures = validate_telemetry(data, expected_run_id=expected_run_id)
+    if not valid:
+        return None, raw, "; ".join(failures)
+    return data, raw, None
+
+
+def write_final(evidence: dict) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    sealed = seal_runtime_evidence(evidence)
+    OUTPUT.write_text(json.dumps(sealed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(sealed, ensure_ascii=False, indent=2))
 
 
 def main():
+    purge_ok, purge_failures = purge_stale_runtime_artifacts()
+    started = now()
+    run_id = uuid.uuid4().hex
+
+    repository, repository_detail = current_repository_identity(ROOT)
+    git_head, git_head_detail = current_git_head(ROOT)
+    fingerprint, fingerprint_scheme = machine_fingerprint()
+    clean, clean_detail = git_worktree_clean(ROOT)
     project = ROOT / "BunkerBeats.uproject"
     ue = discover_ue()
+
     evidence = {
-        "schema": "bunkerbeats.cp1.runtime.evidence.v2",
-        "started_utc": now(),
+        "schema_version": SCHEMA_VERSION,
+        "kind": KIND,
+        "started_at_utc": started,
+        "finished_at_utc": None,
+        "runtime_executed": False,
+        "cp1_pass": False,
+        "status": "BLOCKED",
+        "code": "RUNTIME-NOT-STARTED",
+        "message": "CP1 Runtime wurde noch nicht ausgeführt.",
+        "run_id": run_id,
+        "repository": repository,
+        "repository_detail": repository_detail,
+        "git_head_sha": git_head,
+        "git_head_detail": git_head_detail,
+        "machine_fingerprint_sha256": fingerprint,
+        "machine_identity_scheme": fingerprint_scheme,
+        "git_worktree": clean_detail,
         "host": {"os": platform.system(), "platform": platform.platform(), "machine": platform.machine()},
-        "project": {"path": str(project), "exists": project.exists()},
+        "project": {"path": "BunkerBeats.uproject", "exists": project.is_file()},
         "ue": ue,
         "toolchain": toolchain_snapshot(),
         "steps": [],
         "telemetry": None,
+        "telemetry_path": TELEMETRY_RELATIVE_PATH,
+        "telemetry_sha256": None,
+        "telemetry_error": None,
+        "stale_cleanup": {"status": "PASS" if purge_ok else "FAIL", "failures": purge_failures},
+        "integrity_note": "SHA-256 detects local modification; authenticity comes from context binding, run_id and gate revalidation.",
     }
 
-    # A stale telemetry file must never satisfy a new CP1 run.
-    if TELEMETRY.exists():
-        TELEMETRY.unlink()
-
-    if not project.exists():
-        evidence.update(status="BLOCKED", code="RUNTIME-PROJECT-001", message="BunkerBeats.uproject wurde nicht gefunden.")
+    if not purge_ok:
+        evidence.update(code="RUNTIME-STALE-CLEANUP-FAIL", message="Alte Runtime-Artefakte konnten nicht sicher entfernt werden.")
+    elif repository != EXPECTED_REPOSITORY:
+        evidence.update(code="RUNTIME-REPO-IDENTITY-FAIL", message=f"Checkout gehört nicht eindeutig zu {EXPECTED_REPOSITORY}: {repository_detail}")
+    elif git_head is None:
+        evidence.update(code="RUNTIME-GIT-HEAD-FAIL", message=f"Git-HEAD konnte nicht sicher bestimmt werden: {git_head_detail}")
+    elif fingerprint is None:
+        evidence.update(code="RUNTIME-MACHINE-IDENTITY-FAIL", message=f"Maschinenkontext konnte nicht sicher bestimmt werden: {fingerprint_scheme}")
+    elif not clean:
+        evidence.update(code="RUNTIME-WORKTREE-DIRTY", message=f"Git-Arbeitsstand ist vor Runtime nicht sauber: {clean_detail}")
+    elif not project.is_file():
+        evidence.update(code="RUNTIME-PROJECT-001", message="BunkerBeats.uproject wurde nicht gefunden.")
+    elif platform.system() not in {"Windows", "Linux"}:
+        evidence.update(code="RUNTIME-PLATFORM-001", message=f"CP1 Runtime unterstützt aktuell nur Windows/Linux, erkannt: {platform.system()}")
     elif not ue:
-        evidence.update(status="BLOCKED", code="TOOLCHAIN-UE-001", message="Unreal Engine 5.8 mit RunUAT + UnrealEditor wurde nicht gefunden.")
+        evidence.update(code="TOOLCHAIN-UE-001", message="Unreal Engine exakt 5.8 mit Editor + Build-Skript wurde nicht gefunden.")
     else:
         platform_target = "Win64" if platform.system() == "Windows" else "Linux"
         build_command = [
@@ -173,13 +218,18 @@ def main():
             "-WaitMutex",
         ]
         build_result = run(build_command, timeout=3600)
-        evidence["steps"].append({"step": "build", "status": "GREEN" if build_result["returncode"] == 0 else "RED", "evidence": build_result})
+        evidence["steps"].append(
+            {
+                "step": "build",
+                "status": "GREEN" if build_result["returncode"] == 0 else "RED",
+                "evidence": build_result,
+            }
+        )
 
         if build_result["returncode"] != 0:
             evidence.update(status="RED", code="BUILD-FAILED", message="Der UE-5.8-Build ist fehlgeschlagen.")
         else:
-            report_path = REPORT_DIR / "CP1"
-            report_path.mkdir(parents=True, exist_ok=True)
+            AUTOMATION_REPORT_DIR.mkdir(parents=True, exist_ok=True)
             smoke = [
                 ue["editor"],
                 project,
@@ -187,34 +237,45 @@ def main():
                 "-nop4",
                 "-nosplash",
                 "-NullRHI",
+                f"-CP1EvidenceRunId={run_id}",
                 "-ExecCmds=Automation RunTest BunkerBeats.CP1.CharacterSpawnMovement;Quit",
-                f"-ReportExportPath={report_path}",
+                f"-ReportExportPath={AUTOMATION_REPORT_DIR}",
             ]
             smoke_result = run(smoke, timeout=1800)
-            telemetry, telemetry_error = load_telemetry()
+            evidence["runtime_executed"] = smoke_result.get("launched") is True
+
+            telemetry, telemetry_raw, telemetry_error = load_telemetry(run_id)
             evidence["telemetry"] = telemetry
             evidence["telemetry_error"] = telemetry_error
+            if telemetry is not None and telemetry_raw is not None:
+                evidence["telemetry_sha256"] = telemetry_digest(telemetry_raw)
+
             evidence["steps"].append(
                 {
                     "step": "cp1_character_movement",
                     "status": "GREEN" if smoke_result["returncode"] == 0 and telemetry is not None else "RED",
                     "evidence": smoke_result,
-                    "report_path": str(report_path),
-                    "telemetry_path": str(TELEMETRY),
+                    "report_path": "Diagnostics/Runtime/CP1",
+                    "telemetry_path": TELEMETRY_RELATIVE_PATH,
+                    "run_id": run_id,
                 }
             )
 
             if smoke_result["returncode"] != 0:
                 evidence.update(status="RED", code="RUNTIME-CP1-MOVEMENT-FAIL", message="CP1 Character Spawn + Movement ist fehlgeschlagen.")
             elif telemetry is None:
-                evidence.update(status="RED", code="RUNTIME-CP1-EVIDENCE-FAIL", message=f"UE-Test meldete Erfolg, aber technische Movement-Evidence ist unvollständig: {telemetry_error}")
+                evidence.update(status="RED", code="RUNTIME-CP1-EVIDENCE-FAIL", message=f"UE-Test meldete Erfolg, aber die laufgebundene Telemetrie ist ungültig: {telemetry_error}")
             else:
-                evidence.update(status="GREEN", code="CP1-CHARACTER-MOVEMENT-OK", message="CP1 Build + Character Spawn + Movement + technische Telemetrie wurden real ausgeführt.")
+                evidence.update(
+                    status="GREEN",
+                    cp1_pass=True,
+                    code="CP1-CHARACTER-MOVEMENT-OK",
+                    message="CP1 Build + Character Spawn + Movement + laufgebundene technische Telemetrie wurden real ausgeführt.",
+                )
 
-    evidence["finished_utc"] = now()
-    out = REPORT_DIR / "CP1_runtime_evidence.json"
-    out.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(evidence, ensure_ascii=False, indent=2))
+    evidence["finished_at_utc"] = now()
+    write_final(evidence)
+
     if evidence["status"] == "GREEN":
         return 0
     if evidence["status"] == "BLOCKED":

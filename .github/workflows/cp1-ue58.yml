@@ -11,6 +11,10 @@ on:
       - 'Build/Scripts/**'
       - 'Scripts/run_cp1_ue58.py'
       - 'Scripts/runner_readiness.py'
+      - 'Scripts/runner_identity.py'
+      - 'Scripts/runner_readiness_contract.py'
+      - 'Scripts/cp1_gate_runtime.py'
+      - 'Scripts/cp1_runtime_evidence_contract.py'
       - '.github/workflows/cp1-ue58.yml'
 
 permissions:
@@ -31,13 +35,7 @@ jobs:
         with:
           clean: true
 
-      - name: UE 5.8 runner readiness
-        run: python3 Scripts/runner_readiness.py
-
-      - name: Repository preflight
-        run: python3 Scripts/ci_verify.py
-
-      - name: Real UE 5.8 CP1 run and gate
+      - name: Readiness + preflight + real UE 5.8 CP1 + gate
         run: python3 Scripts/run_cp1_ue58.py
 
       - name: Upload runtime and readiness evidence
