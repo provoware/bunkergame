@@ -608,3 +608,76 @@ Die separate Testdatei `Scripts/tests/test_cp1_runtime_evidence_contract.py` pr�
 **Diagnosefähigkeit:** sehr hoch  
 **Codequalität:** sehr hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-011 — Runner-Registrierung durch serververmittelten Bootstrap beweisen
+
+**Iteration:** UE 5.8 Runner Bootstrap Acceptance  
+**Kategorie:** Self-hosted Runner / Server Evidence / Fail-Closed Activation  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — realer Bootstrap-Lauf weiterhin extern offen  
+**Aufwand:** 4/10  
+**Risiko:** 2/10
+
+### Verbesserungsvorschlag
+
+Die Freigabe des Self-hosted UE-5.8-Runners nicht länger primär aus einer lokalen Readiness-Datei ableiten. Stattdessen soll GitHub selbst beweisen, dass ein Job mit den Pflichtlabels tatsächlich an einen Runner zugestellt wurde und dort die Readiness erfolgreich ausgeführt hat.
+
+### Grund
+
+Eine lokale Readiness-Evidence kann die Maschine und den Checkout sehr streng beschreiben, beweist aber nicht, dass GitHub den Runner registriert hat, ihn erreichen kann oder die erwarteten Scheduler-Labels tatsächlich auf dem zugewiesenen Job vorhanden waren. Außerdem koppelte die bisherige Aktivierung Admin-Terminal und Runner-Workspace unnötig eng.
+
+Der serververmittelte Bootstrap löst diese Lücke: GitHub muss einen Job auf `[self-hosted, unreal, ue-5.8]` wirklich zustellen. Danach lassen sich Run, Job, Runnername, Job-Labels und erfolgreiche Pflichtschritte erneut über die öffentliche GitHub-API prüfen.
+
+### Wirkung
+
+- Runner-Registrierung wird durch reale Jobzustellung statt lokale Annahme bewiesen
+- Runnername und Pflichtlabels stammen aus GitHubs Jobdaten
+- Bootstrap ist an den aktuellen `main`-SHA gebunden
+- nur der neueste passende Bootstrap auf diesem SHA zählt
+- ein neuerer Fehllauf kann einen älteren Erfolg nicht verdecken
+- Bootstrap-PASS ist nur 30 Minuten als Aktivierungsbeweis gültig
+- Admin-Checkout muss exakt auf aktuellem `main` stehen und sauber sein
+- lokale `runner_readiness.json` bleibt Diagnose-/Artifact-Evidence, ist aber nicht mehr alleinige Aktivierungsautorität
+- Aktivierung über den Helper ist nur noch zusammen mit dem Ruleset-Pfad möglich
+- Bootstrap führt niemals CP1 oder einen Repository-Variablen-Write aus
+
+### Technischer Effekt
+
+Neu sind:
+
+```text
+.github/workflows/ue58-runner-bootstrap.yml
+Scripts/runner_bootstrap_contract.py
+Scripts/runner_bootstrap_evidence.py
+Scripts/github_runner_bootstrap_public_verify.py
+Scripts/tests/test_runner_bootstrap_acceptance.py
+```
+
+Die Kette lautet:
+
+```text
+workflow_dispatch auf main
+→ runs-on [self-hosted, unreal, ue-5.8]
+→ runner_readiness.py Schema v3
+→ runner_bootstrap_evidence.json
+→ Artifact auch bei FAIL
+→ Public Verifier liest aktuellen main
+→ neuesten passenden Workflow-Run
+→ genau einen Bootstrap-Job
+→ runner_name + Labels + Pflichtschritte
+→ Freshness ≤ 30 Minuten
+→ UE58_RUNNER_BOOTSTRAP: PASS / INCOMPLETE
+```
+
+`github_p0_admin.py --apply-ruleset --enable-runner-variable` verlangt danach diesen öffentlichen Server-PASS und zusätzlich einen sauberen Admin-Checkout auf exakt demselben aktuellen `main`-SHA. Ein lokales Readiness-JSON allein kann den Variablen-Write damit nicht mehr auslösen.
+
+### Erwarteter Nutzen
+
+**Runner-Evidence-Integrität:** sehr hoch  
+**Infrastruktur-Beweisbarkeit:** sehr hoch  
+**Fehlbedienungsschutz:** sehr hoch  
+**Laienfreundlichkeit:** hoch  
+**Codequalität:** sehr hoch  
+**Gameplay-Risiko:** keines
