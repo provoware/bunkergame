@@ -24,6 +24,7 @@ def load_module(name: str, path: Path):
     return module
 
 
+ruleset = load_module("github_p0_ruleset", ROOT / "Scripts" / "github_p0_ruleset.py")
 admin = load_module("github_p0_admin", ROOT / "Scripts" / "github_p0_admin.py")
 status = load_module("github_p0_status", ROOT / "Scripts" / "github_p0_status.py")
 readiness = load_module("runner_readiness", ROOT / "Scripts" / "runner_readiness.py")
@@ -105,6 +106,69 @@ class ReadinessEvidenceTests(unittest.TestCase):
         ok, detail = self.validate(data)
         self.assertFalse(ok)
         self.assertIn("Readiness-Checks", detail)
+
+
+class RulesetContractTests(unittest.TestCase):
+    def make_ruleset(self) -> dict:
+        return json.loads(json.dumps(ruleset.ruleset_payload()))
+
+    def test_canonical_ruleset_passes(self):
+        ok, failures = ruleset.evaluate_ruleset(self.make_ruleset())
+        self.assertTrue(ok, failures)
+        self.assertEqual(failures, [])
+
+    def test_ruleset_is_active_and_targets_main(self):
+        data = self.make_ruleset()
+        self.assertEqual(data["enforcement"], "active")
+        self.assertIn("refs/heads/main", data["conditions"]["ref_name"]["include"])
+
+    def test_evaluate_mode_is_not_real_protection(self):
+        data = self.make_ruleset()
+        data["enforcement"] = "evaluate"
+        ok, failures = ruleset.evaluate_ruleset(data)
+        self.assertFalse(ok)
+        self.assertTrue(any("active" in item for item in failures))
+
+    def test_missing_required_check_is_blocked(self):
+        data = self.make_ruleset()
+        status_rule = next(rule for rule in data["rules"] if rule["type"] == "required_status_checks")
+        status_rule["parameters"]["required_status_checks"] = [{"context": "static-and-contract"}]
+        ok, failures = ruleset.evaluate_ruleset(data)
+        self.assertFalse(ok)
+        self.assertTrue(any("repository-quality" in item for item in failures))
+
+    def test_non_strict_status_policy_is_blocked(self):
+        data = self.make_ruleset()
+        status_rule = next(rule for rule in data["rules"] if rule["type"] == "required_status_checks")
+        status_rule["parameters"]["strict_required_status_checks_policy"] = False
+        ok, failures = ruleset.evaluate_ruleset(data)
+        self.assertFalse(ok)
+        self.assertTrue(any("aktuell" in item for item in failures))
+
+    def test_force_push_or_delete_gap_is_blocked(self):
+        data = self.make_ruleset()
+        data["rules"] = [rule for rule in data["rules"] if rule["type"] not in {"deletion", "non_fast_forward"}]
+        ok, failures = ruleset.evaluate_ruleset(data)
+        self.assertFalse(ok)
+        self.assertTrue(any("Löschen" in item for item in failures))
+        self.assertTrue(any("Force-Push" in item for item in failures))
+
+    def test_bypass_actor_is_blocked(self):
+        data = self.make_ruleset()
+        data["bypass_actors"] = [{"actor_id": 1, "actor_type": "RepositoryRole", "bypass_mode": "always"}]
+        ok, failures = ruleset.evaluate_ruleset(data)
+        self.assertFalse(ok)
+        self.assertTrue(any("Bypass" in item for item in failures))
+
+    def test_ruleset_does_not_require_cp1_runtime_yet(self):
+        data = self.make_ruleset()
+        status_rule = next(rule for rule in data["rules"] if rule["type"] == "required_status_checks")
+        contexts = {item["context"] for item in status_rule["parameters"]["required_status_checks"]}
+        self.assertNotIn("cp1-runtime", contexts)
+
+    def test_duplicate_name_is_not_treated_as_unique(self):
+        item = {"id": 1, "name": ruleset.RULESET_NAME}
+        self.assertIsNone(ruleset.find_named_ruleset([item, dict(item, id=2)]))
 
 
 class GitHubAdminDiagnosticTests(unittest.TestCase):
