@@ -6,7 +6,7 @@
 
 **Kategorie:** Launcher / GUI / Vorprüfung-Nachvalidierung / Fail-Safe UX  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT — Hosted-CI-Abnahme dieser Iteration steht noch aus  
+**Status:** 🟢 IMPLEMENTIERT + HOSTED GEPRÜFT — realer lokaler Re-Test im neuen ZIP noch offen  
 **Nutzen:** 10/10  
 **Aufwand:** 4/10  
 **Risiko der Umsetzung:** 2/10
@@ -100,7 +100,9 @@ Worker exception / alte Payload / fehlendes Feld
 - Import-Seiteneffekte für Diagnose-/Regression-Speicher reduziert
 - Regressionstests implementiert
 - Repository-Pflichtdateien erweitert
-- Hosted-CI-Abnahme des neuen Branches noch offen
+- Hosted `repository-quality`: PASS inklusive Environment-GUI-Regressionen und Iteration Guard auf PR #9
+- Hosted `static-and-contract`: PASS auf PR #9
+- realer lokaler Re-Test des neu zu bauenden vollständigen ZIPs noch offen
 - echter UE-5.8-CP1-Runtime-Lauf weiterhin `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
@@ -111,3 +113,4 @@ Worker exception / alte Payload / fehlendes Feld
 - Iteration Guard W-012/CQ-012 akzeptiert
 - PR konfliktfrei integriert ist
 - anschließend ein neues vollständiges, sauberes Projekt-ZIP aus dem gefixten `main` erzeugt und erneut strukturell validiert wurde
+- der reale lokale Start mit dem neuen ZIP ohne `KeyError: 'after'` läuft; fehlende UE 5.8 darf weiterhin korrekt YELLOW melden
