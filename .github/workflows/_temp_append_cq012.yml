@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   append-cq:
-    if: github.event.head_commit.message != 'chore: append CQ-012 journal entry'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -98,6 +97,7 @@ jobs:
           PY
 
           if git diff --quiet -- CODEQUALITÄT.md; then
+            echo "CQ-012 already present; nothing to commit."
             exit 0
           fi
 
