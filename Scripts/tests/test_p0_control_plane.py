@@ -25,6 +25,7 @@ def load_module(name: str, path: Path):
 
 
 admin = load_module("github_p0_admin", ROOT / "Scripts" / "github_p0_admin.py")
+status = load_module("github_p0_status", ROOT / "Scripts" / "github_p0_status.py")
 readiness = load_module("runner_readiness", ROOT / "Scripts" / "runner_readiness.py")
 preflight = load_module("p0_preflight", ROOT / "Scripts" / "p0_preflight.py")
 lifecycle = load_module("branch_lifecycle_guard", ROOT / "Scripts" / "branch_lifecycle_guard.py")
@@ -104,6 +105,85 @@ class ReadinessEvidenceTests(unittest.TestCase):
         ok, detail = self.validate(data)
         self.assertFalse(ok)
         self.assertIn("Readiness-Checks", detail)
+
+
+class GitHubAdminDiagnosticTests(unittest.TestCase):
+    def test_repo_admin_permission_is_accepted(self):
+        ok, detail = admin.repo_admin_capability(
+            {
+                "full_name": admin.REPO,
+                "archived": False,
+                "permissions": {"admin": True, "maintain": True, "push": True},
+            }
+        )
+        self.assertTrue(ok)
+        self.assertIn("Adminrecht", detail)
+
+    def test_maintain_without_admin_is_blocked(self):
+        ok, detail = admin.repo_admin_capability(
+            {
+                "full_name": admin.REPO,
+                "archived": False,
+                "permissions": {"admin": False, "maintain": True, "push": True},
+            }
+        )
+        self.assertFalse(ok)
+        self.assertIn("Maintain", detail)
+
+    def test_wrong_repository_is_blocked(self):
+        ok, detail = admin.repo_admin_capability(
+            {"full_name": "someone/else", "archived": False, "permissions": {"admin": True}}
+        )
+        self.assertFalse(ok)
+        self.assertIn("falsches Repository", detail)
+
+    def test_403_is_classified_as_authorization(self):
+        code, _, next_step = admin.classify_gh_error("gh: Resource not accessible by integration (HTTP 403)")
+        self.assertEqual(code, "AUTHORIZATION_403")
+        self.assertIn("Admin", next_step)
+
+    def test_404_is_classified_as_resource_problem(self):
+        code, _, _ = admin.classify_gh_error("gh: Not Found (HTTP 404)")
+        self.assertEqual(code, "RESOURCE_404")
+
+    def test_422_is_classified_as_validation_problem(self):
+        code, _, _ = admin.classify_gh_error("gh: Validation Failed (HTTP 422)")
+        self.assertEqual(code, "VALIDATION_422")
+
+    def test_unknown_error_is_not_misclassified(self):
+        code, _, _ = admin.classify_gh_error("connection reset")
+        self.assertEqual(code, "UNKNOWN_GITHUB_ERROR")
+
+
+class GitHubStatusDiagnosticTests(unittest.TestCase):
+    def test_server_protected_true_is_recognized(self):
+        self.assertTrue(status.branch_protected_hint({"name": "main", "protected": True}))
+
+    def test_server_protected_false_is_not_pass(self):
+        self.assertFalse(status.branch_protected_hint({"name": "main", "protected": False}))
+
+    def test_wrong_branch_cannot_prove_main(self):
+        self.assertFalse(status.branch_protected_hint({"name": "develop", "protected": True}))
+
+    def test_protection_evaluation_requires_both_checks_and_core_rules(self):
+        good = {
+            "required_status_checks": {
+                "strict": True,
+                "contexts": ["static-and-contract", "repository-quality"],
+            },
+            "enforce_admins": {"enabled": True},
+            "required_pull_request_reviews": {"dismiss_stale_reviews": True},
+            "allow_force_pushes": {"enabled": False},
+            "allow_deletions": {"enabled": False},
+        }
+        ok, checks = status.evaluate_protection(good)
+        self.assertTrue(ok)
+        self.assertEqual(checks, {"static-and-contract", "repository-quality"})
+
+        bad = json.loads(json.dumps(good))
+        bad["required_status_checks"]["contexts"] = ["static-and-contract"]
+        ok, _ = status.evaluate_protection(bad)
+        self.assertFalse(ok)
 
 
 class EngineVersionTests(unittest.TestCase):
