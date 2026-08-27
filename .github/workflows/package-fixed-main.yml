@@ -1,0 +1,82 @@
+name: Package Fixed Main Snapshot
+
+on:
+  push:
+    branches:
+      - artifact/package-fixed-main-3b540300
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-fixed-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout verified main snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 3b540300421ea96bfc6b61c5cae96010da6218b1
+          clean: true
+          fetch-depth: 1
+
+      - name: Verify fixed project
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 Scripts/ci_verify.py
+          python3 Scripts/repo_quality.py
+
+      - name: Build clean complete ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_ROOT="BUNKER_BEATS_2026_FIXED_P0_HARDENED_main_3b540300"
+          OUT_DIR="$RUNNER_TEMP/package-output"
+          STAGE="$RUNNER_TEMP/$PACKAGE_ROOT"
+          rm -rf "$OUT_DIR" "$STAGE"
+          mkdir -p "$OUT_DIR" "$STAGE"
+
+          rsync -a ./ "$STAGE/" \
+            --exclude '.git/' \
+            --exclude 'Binaries/' \
+            --exclude 'DerivedDataCache/' \
+            --exclude 'Diagnostics/' \
+            --exclude 'Intermediate/' \
+            --exclude 'Saved/' \
+            --exclude '__pycache__/' \
+            --exclude '.pytest_cache/' \
+            --exclude '*.pyc' \
+            --exclude '.DS_Store'
+
+          cat > "$STAGE/PAKET_INFO.txt" <<'EOF'
+          BUNKER BEATS 2026 — FIXED / P0 HARDENED
+          =======================================
+          Quelle: provoware/bunkergame
+          Branch: main
+          Commit: 3b540300421ea96bfc6b61c5cae96010da6218b1
+          Paketstatus: FIXED_P0_HARDENED
+          Inhalt: vollständige versionierte Projektbasis ohne Git-Metadaten und generierte Lauf-/Cache-Daten
+          Vor Paketierung geprüft: Scripts/ci_verify.py + Scripts/repo_quality.py
+          CP1 Runtime: weiterhin nicht als real bestanden behauptet; echter UE-5.8-Lauf erforderlich.
+          EOF
+
+          find "$STAGE" -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find "$STAGE" -type f -name '*.pyc' -delete
+
+          (cd "$RUNNER_TEMP" && zip -r -9 "$OUT_DIR/${PACKAGE_ROOT}.zip" "$PACKAGE_ROOT")
+          sha256sum "$OUT_DIR/${PACKAGE_ROOT}.zip" > "$OUT_DIR/${PACKAGE_ROOT}.zip.sha256"
+
+          echo "PACKAGE_FILE=$OUT_DIR/${PACKAGE_ROOT}.zip" >> "$GITHUB_ENV"
+          echo "PACKAGE_SHA=$OUT_DIR/${PACKAGE_ROOT}.zip.sha256" >> "$GITHUB_ENV"
+
+      - name: Upload complete project package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: BUNKER_BEATS_2026_FIXED_P0_HARDENED_main_3b540300
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ env.PACKAGE_FILE }}
+            ${{ env.PACKAGE_SHA }}
