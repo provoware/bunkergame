@@ -59,6 +59,10 @@ def failed(results: list[StepResult], key: str) -> bool:
     return item is None or not item.passed
 
 
+def find_result(results: list[StepResult], key: str) -> StepResult | None:
+    return next((result for result in results if result.step.key == key), None)
+
+
 def next_action(results: list[StepResult], include_readiness: bool) -> str:
     if failed(results, "branch"):
         return "Neuen Arbeitsbranch vom aktuellen main erstellen; gemergten Feature-Branch nicht weiterverwenden."
@@ -77,7 +81,8 @@ def next_action(results: list[StepResult], include_readiness: bool) -> str:
             "Self-hosted Runner registrieren; danach GitHub Actions → `UE 5.8 Runner Bootstrap Acceptance` "
             "auf main manuell ausführen und anschließend python3 Scripts/p0_preflight.py --full starten."
         )
-    if failed(results, "bootstrap"):
+    bootstrap = find_result(results, "bootstrap")
+    if bootstrap is not None and not bootstrap.passed:
         return (
             "GitHub Actions → `UE 5.8 Runner Bootstrap Acceptance` auf main manuell ausführen. "
             "Erst ein frischer UE58_RUNNER_BOOTSTRAP: PASS darf die Runner-Aktivierung freigeben."
