@@ -1,0 +1,39 @@
+# Unreal generated / machine-local
+Binaries/
+Build/*/FileOpenOrder/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+.vscode/
+.idea/
+*.VC.db
+*.VC.opendb
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.xcodeproj
+
+# Project runtime evidence / generated diagnostics
+Diagnostics/
+Reports/
+SHA256SUMS.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*~
+*.swp
+
+# Keep intentional Build scripts tracked
+!Build/
+!Build/Scripts/
+!Build/Scripts/**

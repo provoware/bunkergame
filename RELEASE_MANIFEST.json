@@ -1,0 +1,16 @@
+{
+  "release_candidate": "1.7.0-unreal58-autostart",
+  "core_pipeline": "preserved",
+  "unreal_58_path": "implemented",
+  "unreal_toolchain_in_current_environment": "NOT_AVAILABLE",
+  "unreal_runtime": "BLOCKED",
+  "validation": {
+    "python_syntax": "PASS",
+    "unreal_runner_exit_code": 3,
+    "unreal_discovery_status": "BLOCKED",
+    "unreal_runtime_result_status": "BLOCKED",
+    "no_fake_success": true,
+    "build_executed": false,
+    "pie_executed": false
+  }
+}

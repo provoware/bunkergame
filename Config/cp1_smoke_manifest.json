@@ -1,0 +1,18 @@
+{
+  "suite_id": "BunkerBeats.Smoke",
+  "checkpoint": "CP1",
+  "tests": [
+    "BunkerBeats.Smoke.CP1.BuildIdentity",
+    "BunkerBeats.Smoke.CP1.InputContract",
+    "BunkerBeats CP1 Boot"
+  ],
+  "commandline": "Automation RunTest BunkerBeats.Smoke;Quit",
+  "report_option": "-ReportExportPath=<diagnostics path>",
+  "editor_automation": "UE.EditorAutomation",
+  "status": "PREPARED_NOT_RUNTIME_VALIDATED",
+  "preconditions": {
+    "project_file": "BunkerBeats.uproject",
+    "engine_association": "5.8",
+    "automation_suite": "BunkerBeats.Smoke"
+  }
+}

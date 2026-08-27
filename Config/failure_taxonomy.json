@@ -1,0 +1,44 @@
+{
+  "schema": "bunkerbeatz.failure.taxonomy.v1",
+  "classes": {
+    "ENVIRONMENT": [
+      "TOOLCHAIN-",
+      "ENV-"
+    ],
+    "BUILD": [
+      "BUILD-"
+    ],
+    "RUNTIME": [
+      "RUNTIME-"
+    ],
+    "TEST": [
+      "TEST-"
+    ],
+    "DATA": [
+      "DATA-"
+    ],
+    "PIPELINE": [
+      "PIPELINE-"
+    ],
+    "GIT": [
+      "GIT-"
+    ]
+  },
+  "severity_policy": {
+    "P0": [
+      "BUILD-FAILED",
+      "RUNTIME-CP1-CRASH",
+      "RUNTIME-CP1-BOOT-FAIL"
+    ],
+    "P1": [
+      "TOOLCHAIN-",
+      "ENV-"
+    ],
+    "P2": [
+      "TEST-",
+      "DATA-",
+      "PIPELINE-",
+      "GIT-"
+    ]
+  }
+}

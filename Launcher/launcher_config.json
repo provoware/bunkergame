@@ -1,0 +1,21 @@
+{
+  "project_name": "BUNKER BEATS",
+  "engine_expected": "5.8",
+  "project_file": "BunkerBeats.uproject",
+  "automation_suite": "BunkerBeats.Smoke",
+  "start_profiles": {
+    "Core QA": "--core",
+    "Unreal CP1": "--unreal-build --unreal-test",
+    "Full Validation": "--unreal-build --unreal-test --package"
+  },
+  "directories": {
+    "diagnostics": "Diagnostics/Launcher",
+    "reports": "Diagnostics/Reports"
+  },
+  "policy": {
+    "auto_install": false,
+    "auto_repair_safe_only": true,
+    "never_forge_success": true,
+    "preserve_user_changes": true
+  }
+}

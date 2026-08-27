@@ -1,0 +1,20 @@
+{
+  "suite": "BunkerBeats.Smoke",
+  "cp1_tests": [
+    "BunkerBeats.CP1.CharacterSpawnMovement"
+  ],
+  "description": "First real Character spawn + movement smoke for CP1.",
+  "evidence_required": [
+    "test_started",
+    "character_spawned",
+    "movement_displacement",
+    "frame_time",
+    "position_before_after",
+    "velocity",
+    "movement_component",
+    "test_passed",
+    "report_exported"
+  ],
+  "max_runtime_seconds": 10,
+  "telemetry_schema": "bunkerbeats.cp1.movement.telemetry.v2"
+}
