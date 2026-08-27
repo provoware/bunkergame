@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import stat
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,6 +34,23 @@ def run():
         data = json.loads(manifest.read_text(encoding="utf-8"))
         ck("suite id", data.get("suite_id") == "BunkerBeats.Smoke", str(data.get("suite_id")))
         ck("checkpoint CP1", data.get("checkpoint") == "CP1", str(data.get("checkpoint")))
+
+    # Linux Klick-&-Start is part of the portable package contract. Git must
+    # preserve these execute bits so a normal archive/checkout stays startable.
+    linux_launchers = (
+        "START_BUNKER_BEATS_INTELLIGENT.sh",
+        "START_BUNKER_BEATS_ALL.sh",
+        "RUN_CP1_UE58_ALL.sh",
+        "Build/Scripts/run_cp1_smoke.sh",
+    )
+    for rel in linux_launchers:
+        path = ROOT / rel
+        exists = path.is_file()
+        ck(f"linux launcher present: {rel}", exists)
+        if exists:
+            mode = path.stat().st_mode
+            executable = bool(mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH))
+            ck(f"linux launcher executable: {rel}", executable, oct(stat.S_IMODE(mode)))
 
     return checks
 
