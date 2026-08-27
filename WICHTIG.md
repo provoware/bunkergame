@@ -2,115 +2,87 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-012 — Startroutine gegen unvollständige Diagnose-Payloads absichern
+## W-2026-08-27-013 — Linux-Klick-&-Start durch echte Dateirechte garantieren
 
-**Kategorie:** Launcher / GUI / Vorprüfung-Nachvalidierung / Fail-Safe UX  
+**Kategorie:** Portabilität / Launcher / Release-Qualität / Linux  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT + HOSTED GEPRÜFT — realer lokaler Re-Test im neuen ZIP noch offen  
-**Nutzen:** 10/10  
-**Aufwand:** 4/10  
-**Risiko der Umsetzung:** 2/10
+**Status:** 🟢 IMPLEMENTIERT + HOSTED GEPRÜFT — finaler Release-Neubau noch offen  
+**Nutzen:** 9/10  
+**Aufwand:** 2/10  
+**Risiko der Umsetzung:** 1/10
 
 ### Beobachtung
 
-Beim realen Start über `START_BUNKER_BEATS_INTELLIGENT.sh` trat nach erfolgreicher Grunddiagnose ein Tkinter-Callback-Absturz auf:
+Der Release-Smoke des nach PR #9 erzeugten vollständigen ZIPs bestätigte den Environment-Doctor-Fix: Schema v2, explizite Nachvalidierung und 10/10 Contract-Regressionstests waren grün. Dabei wurde jedoch ein weiterer Portabilitätsfehler sichtbar:
 
 ```text
-KeyError: 'after'
+START_BUNKER_BEATS_INTELLIGENT.sh executable=no
 ```
 
-Die GUI griff direkt auf `payload["summary"]["after"]` zu. Der Core `EnvironmentAssistant.run()` erzeugte jedoch bis dahin überhaupt kein Feld `after`. Dadurch bestand ein widersprüchlicher interner Vertrag: Die Oberfläche erwartete eine Nachvalidierung, die Datenquelle nicht bereitstellte.
-
-Zusätzlich konnte jede unerwartete Worker- oder Darstellungs-Ausnahme den periodischen Tkinter-Polling-Callback beenden. Das erzeugt für Laien den Eindruck eines eingefrorenen oder defekten Tools.
+Der Git-Tree bestätigte, dass `START_BUNKER_BEATS_INTELLIGENT.sh`, `START_BUNKER_BEATS_ALL.sh` und der interne Shell-Smoke-Launcher mit Modus `100644` gespeichert waren. Nur `RUN_CP1_UE58_ALL.sh` war bereits `100755`.
 
 ### Verbesserungsvorschlag
 
-Die Startroutine auf einen expliziten, versionierten und defensiv auswertbaren Ablauf umstellen:
+Alle Linux-Startskripte, die als Start-/Smoke-Einstieg dienen, müssen im Repository selbst als ausführbar (`100755`) versioniert sein. Die Release-Pipeline darf die Rechte nicht künstlich beim Packen reparieren; sonst wäre das ZIP nicht mehr die unveränderte Projektbasis von `main`.
 
-```text
-Vorprüfung
-→ optional sichere Reparatur
-→ vollständige Nachvalidierung
-→ versionierter Summary-Contract
-→ defensive GUI-Normalisierung
-→ Status/Ampel
-```
-
-Keine GUI-Komponente darf ungeprüft voraussetzen, dass ein einzelnes Payload-Feld existiert. Fehlende, alte oder teilweise Ergebnisdaten müssen als verständlicher Diagnosezustand erscheinen und dürfen niemals den Tkinter-Callback abbrechen.
+Zusätzlich muss der Package-Integrity-Test die Execute-Bits dauerhaft prüfen.
 
 ### Grund
 
-Eine laienoptimierte Startroutine muss gerade bei Fehlern stabiler sein als der zu prüfende Zustand. Ein Diagnosewerkzeug, das durch ein fehlendes Diagnosefeld selbst abstürzt, verletzt das Fail-Safe-Prinzip und verhindert die eigentliche Fehlerbehandlung.
+`bash START_BUNKER_BEATS_INTELLIGENT.sh` funktioniert auch ohne Execute-Bit, aber ein echtes **Klick-&-Start**-Versprechen benötigt ausführbare Dateien. Dateirechte sind Teil des Release-Artefakts und dürfen nicht als implizite lokale Nacharbeit vorausgesetzt werden.
 
-Vorprüfung und Nachvalidierung müssen außerdem **im Datenmodell selbst** vorhanden sein. Nur Textmeldungen wie „ich prüfe vorher/nachher“ reichen nicht als technischer Nachweis.
+Ein Paket, dessen Inhalt korrekt ist, dessen Linux-Einstieg aber nach dem Entpacken nicht direkt ausführbar ist, ist für die angestrebte Laienbedienung nur teilweise portabel.
 
 ### Umgesetzt
 
-- `Launcher/core/environment_contract.py` als zentrale reine Vertragslogik ergänzt.
-- Summary-Schema auf Version 2 gesetzt.
-- `EnvironmentAssistant.run()` liefert jetzt immer explizit `before` und `after`.
-- Findings werden in ein stabiles JSON-fähiges Format normalisiert.
-- Gesamtstatus wird aus der Nachvalidierung bestimmt.
-- `repair_requested` dokumentiert, ob der Reparaturpfad angefordert wurde.
-- GUI bevorzugt `after`, akzeptiert aber Legacy-Tupel und fällt kontrolliert auf `before` oder `issues` zurück.
-- fehlende `summary`-, `before`- oder `after`-Daten erzeugen verständliche Warnungen statt `KeyError`.
-- Worker-Ausnahmen werden in die GUI-Queue übertragen und als roter Startfehler angezeigt.
-- einzelne fehlerhafte GUI-Ereignisse können den Polling-Callback nicht mehr dauerhaft beenden.
-- parallele Mehrfachstarts über die beiden GUI-Schaltflächen werden während eines laufenden Jobs blockiert.
-- Buttons werden nach Ergebnis oder Fehler wieder freigegeben.
-- `diagnostics.py` und `regression_knowledge.py` erzeugen ihre `Diagnostics`-Ordner nicht mehr beim bloßen Import, sondern erst beim tatsächlichen Schreiben.
-- `Scripts/tests/test_environment_gui_contract.py` deckt aktuelle Payloads, Legacy-Payloads, fehlende Nachvalidierung, fehlende Summary, ungültige Einträge, Statusableitung sowie explizite Vor-/Nachvalidierung des Assistants ab.
-- Contract, GUI und Regressionstest wurden in den Repository Quality Guard als Pflichtdateien aufgenommen.
+- `Tests/test_cp1_package_integrity.py` prüft jetzt für alle zentralen Linux-Einstiege Existenz und Execute-Bit.
+- folgende Git-Modi sind auf `100755` gehärtet:
+  - `START_BUNKER_BEATS_INTELLIGENT.sh`
+  - `START_BUNKER_BEATS_ALL.sh`
+  - `RUN_CP1_UE58_ALL.sh`
+  - `Build/Scripts/run_cp1_smoke.sh`
+- die Prüfung läuft im bestehenden `ci_verify.py`-Pfad und wird damit bei Hosted Validate sowie vor Release-Paketierung erzwungen.
 
 ### Wirkung
 
-- realer `KeyError: 'after'` wird strukturell verhindert
-- Vorprüfung und Nachvalidierung sind jetzt technisch belegbare Datenphasen
-- alte oder teilweise Payloads bleiben darstellbar
-- GUI bleibt auch bei Worker-/Darstellungsfehlern bedienbar
-- kein stiller Tkinter-Polling-Abbruch mehr durch ein einzelnes Event
-- bessere Laienführung bei unvollständigen Ergebnissen
-- weniger versteckte Dateisystemänderungen beim Import
-- stabilere Packaging-/Testreihenfolge durch weniger Import-Seiteneffekte
-- Regressionserkennung schützt den konkreten Produktionsfehler dauerhaft
+- Linux-Klick-&-Start bleibt beim Checkout und im ZIP erhalten
+- kein nachträgliches `chmod +x` als versteckte Benutzerpflicht
+- Release-Paket entspricht weiterhin der tatsächlichen `main`-Projektbasis
+- Regression bei Git-Dateimodi wird automatisch erkannt
+- Start-, Smoke- und CP1-Einstiege verwenden konsistente Unix-Rechte
+- bessere Portabilität und Laienfreundlichkeit
 
 ### Technischer Effekt
 
 ```text
-EnvironmentAssistant
-→ scan() = before
-→ safe_repair() optional
-→ scan() = after
-→ environment_contract schema v2
-→ normalize_result_payload()
-→ GUI zeigt bevorzugt after
-
-Fehlerfall:
-Worker exception / alte Payload / fehlendes Feld
-→ Queue / Contract-Normalisierung
-→ verständlicher RED-/WARNING-Zustand
-→ Tkinter poll läuft weiter
+Git tree mode 100755
+→ checkout erhält Execute-Bit
+→ rsync übernimmt Modus
+→ ZIP speichert Unix-Modus
+→ normaler Linux-Extractor stellt Execute-Bit wieder her
+→ Package-Integrity-Test prüft denselben Vertrag
 ```
 
 ### Aktueller belegter Zustand
 
-- Fehlerursache anhand des ausgelieferten `main` reproduzierbar identifiziert
-- Core-/GUI-Vertragslücke behoben
-- defensive Payload-Normalisierung implementiert
-- Import-Seiteneffekte für Diagnose-/Regression-Speicher reduziert
-- Regressionstests implementiert
-- Repository-Pflichtdateien erweitert
-- Hosted `repository-quality`: PASS inklusive Environment-GUI-Regressionen und Iteration Guard auf PR #9
-- Hosted `static-and-contract`: PASS auf PR #9
-- realer lokaler Re-Test des neu zu bauenden vollständigen ZIPs noch offen
+- Environment-Doctor-v2-Core-Smoke: PASS
+- `summary.after` vorhanden
+- fehlende UE 5.8 bleibt korrekt YELLOW
+- Environment-GUI-Contract-Tests: 10/10 PASS
+- Git-Modus-Fehler der Startskripte real im Release-Smoke gefunden
+- Regressionstest für Execute-Bits implementiert
+- Hosted `repository-quality`: PASS auf PR #10 inklusive Iteration Guard
+- Hosted `static-and-contract`: PASS auf PR #10 inklusive Package-Integrity-Execute-Bit-Prüfung
+- CP1 Runtime-Workflow weiterhin korrekt SKIPPED ohne reale UE-Freigabe
+- finaler Release-Neubau aus dem gemergten `main` noch offen
 - echter UE-5.8-CP1-Runtime-Lauf weiterhin `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
+- alle vier Linux-Einstiege im Git-Tree `100755` besitzen
 - `static-and-contract` PASS ist
 - `repository-quality` PASS ist
-- neue Environment-GUI-Contract-Regressionen PASS sind
-- Iteration Guard W-012/CQ-012 akzeptiert
+- Package-Integrity-Test Execute-Bits PASS meldet
 - PR konfliktfrei integriert ist
-- anschließend ein neues vollständiges, sauberes Projekt-ZIP aus dem gefixten `main` erzeugt und erneut strukturell validiert wurde
-- der reale lokale Start mit dem neuen ZIP ohne `KeyError: 'after'` läuft; fehlende UE 5.8 darf weiterhin korrekt YELLOW melden
+- neues vollständiges ZIP aus dem daraus resultierenden `main` erzeugt wurde
+- lokale ZIP-Struktur, SHA-256 und Execute-Bits erneut geprüft sind
