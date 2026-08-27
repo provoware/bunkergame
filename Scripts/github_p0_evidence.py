@@ -109,7 +109,7 @@ def collect_evidence(*, getter: Getter = github_get, now: datetime | None = None
         return seal_evidence(evidence)
 
     ruleset_id = matches[0].get("id")
-    if not isinstance(ruleset_id, int) or ruleset_id <= 0:
+    if type(ruleset_id) is not int or ruleset_id <= 0:
         failures.append("ruleset summary contains no valid positive integer id")
         return seal_evidence(evidence)
 
