@@ -19,6 +19,8 @@ Self-hosted Runner registrieren
    ↓
 Runner Readiness PASS
    ↓
+frische Readiness-Evidence erneut validieren
+   ↓
 UE58_RUNNER_ENABLED=true
    ↓
 CP1 Runtime ausführen
@@ -145,19 +147,23 @@ UE58_EDITOR_CMD=/voller/pfad/zu/UnrealEditor
 
 ## 5. AUTOMATISCHE READINESS-PRÜFUNG
 
-Der Runtime-Workflow führt vor dem eigentlichen UE-Test aus:
+Auf der echten Runner-Maschine ausführen:
 
 ```bash
 python3 Scripts/runner_readiness.py
 ```
 
+Der Runtime-Workflow führt dieselbe Prüfung vor dem eigentlichen UE-Test erneut aus.
+
 Geprüft werden unter anderem:
 
 - Projektdatei
 - Editor-Target
-- erkannter UE-5.8-Pfad
+- erkannter UE-Pfad
 - UnrealEditor
 - Build-Skript
+- **echte Engine-Version aus `Engine/Build/Build.version`**
+- **MajorVersion = 5 und MinorVersion = 8**
 - Python
 - Schreibrechte
 - mindestens 5 GB freier Speicher
@@ -168,6 +174,8 @@ Ausgabe:
 ```text
 Diagnostics/Runtime/runner_readiness.json
 ```
+
+Die Evidence verwendet Schema v2 und enthält einen UTC-Zeitstempel (`generated_at_utc`).
 
 > `RUNNER_READINESS: PASS` bedeutet nur: **Maschine bereit.** Es bedeutet ausdrücklich nicht `CP1 PASS`.
 
@@ -196,23 +204,37 @@ Mögliche Zustände:
 
 ## 7. ERST JETZT RUNTIME AKTIVIEREN
 
-Repository-Variable setzen:
+Bevor `UE58_RUNNER_ENABLED=true` gesetzt wird, muss die lokal erzeugte Readiness-Evidence **frisch** sein.
 
-`Settings → Secrets and variables → Actions → Variables`
-
-Name:
+Akzeptiert wird nur:
 
 ```text
-UE58_RUNNER_ENABLED
+Schema v2
++ kind = UE58_RUNNER_READINESS
++ status = PASS
++ alle checks = true
++ engine_version_exact_5_8 = true
++ runtime_executed = false
++ cp1_pass = false
++ Zeitstempel plausibel
++ höchstens 30 Minuten alt
 ```
 
-Wert:
+Empfohlener sicherer Weg:
+
+```bash
+python3 Scripts/github_p0_admin.py --apply --enable-runner-variable
+```
+
+Das Skript prüft die Evidence unmittelbar vor der GitHub-Änderung erneut und blockiert die Aktivierung bei fehlender, alter oder widersprüchlicher Evidence.
+
+Repository-Variable:
 
 ```text
-true
+UE58_RUNNER_ENABLED=true
 ```
 
-Erst nach erfolgreicher Runner-Bereitschaft setzen.
+> Nicht mehr empfohlen: die Variable manuell zu setzen, ohne unmittelbar zuvor die Evidence-Prüfung durch den Admin-Assistenten laufen zu lassen.
 
 ---
 
@@ -275,14 +297,17 @@ Zusätzlich:
 - [ ] Self-hosted Runner registriert
 - [ ] Labels `unreal` und `ue-5.8` vorhanden
 - [ ] Runner Status `Idle`
+- [ ] `Build.version` bestätigt exakt UE 5.8
 - [ ] `runner_readiness.py` PASS
+- [ ] Evidence höchstens 30 Minuten alt
+- [ ] Admin-Assistent akzeptiert die Evidence
 - [ ] `UE58_RUNNER_ENABLED=true`
 - [ ] erster CP1-Lauf ausgeführt
 - [ ] Runtime-Evidence geprüft
 
 ---
 
-## 11. NEU — SICHERER ADMIN-ASSISTENT
+## 11. SICHERER ADMIN-ASSISTENT
 
 Damit die Branch-Protection nicht ausschließlich per Hand konfiguriert werden muss, gibt es zwei Hilfsskripte.
 
@@ -326,29 +351,37 @@ Dieser Prüfer verändert nichts und kontrolliert:
 - Status von `UE58_RUNNER_ENABLED`
 - passende Self-hosted Runner mit Labels `self-hosted`, `unreal`, `ue-5.8`
 
-### Runner-Variable bewusst getrennt
+### Runner-Variable sicher freischalten
 
-`UE58_RUNNER_ENABLED=true` wird nicht automatisch mit Branch-Protection gesetzt.
-
-Erst nach echtem:
-
-```text
-RUNNER_READINESS: PASS
-```
-
-darf entweder ausgeführt werden:
-
-```bash
-gh variable set UE58_RUNNER_ENABLED --repo provoware/bunkergame --body true
-```
-
-oder explizit:
+Nach frischem `RUNNER_READINESS: PASS`:
 
 ```bash
 python3 Scripts/github_p0_admin.py --apply --enable-runner-variable
 ```
 
-> Der zweite Schalter ist bewusst gefährlicher und darf nicht vor realem Runner-Readiness-PASS verwendet werden.
+Der Schalter ist nicht mehr nur warnend. Er besitzt ein **hartes Evidence-Gate**. Ohne frische gültige Evidence bleibt die Variable unverändert.
+
+---
+
+## 12. AUTOMATISCHE REGRESSIONSTESTS
+
+Der Hosted `Quality Guard` führt zusätzlich aus:
+
+```bash
+python3 -m unittest discover -s Scripts/tests -p 'test_*.py' -v
+```
+
+Damit werden unter anderem getestet:
+
+- frische PASS-Evidence wird akzeptiert
+- fehlende Evidence wird blockiert
+- FAIL-Evidence wird blockiert
+- Evidence älter als 30 Minuten wird blockiert
+- unplausible Zukunftszeitstempel werden blockiert
+- falsche Schema-Version wird blockiert
+- Runtime-/CP1-Claims in Readiness werden blockiert
+- UE 5.8 aus `Build.version` wird akzeptiert
+- UE 5.7 wird abgelehnt
 
 ---
 
