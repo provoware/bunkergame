@@ -124,3 +124,72 @@ Anschließend liest das Skript die Branch-Protection erneut und meldet `GITHUB_P
 **Nachvollziehbarkeit:** sehr hoch  
 **Rollback-Fähigkeit:** hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-003 — Runner-Aktivierung an frische Evidence koppeln
+
+**Iteration:** P0 Evidence Hardening  
+**Kategorie:** Evidence Integrity / Self-hosted Runner / Regression Prevention  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — reale Maschinen-Evidence weiterhin offen  
+**Aufwand:** 4/10  
+**Risiko:** 2/10
+
+### Verbesserungsvorschlag
+
+Sicherheitsrelevante Zustandsübergänge nicht nur dokumentarisch an Vorbedingungen binden, sondern die Vorbedingungen unmittelbar vor dem Übergang maschinell erneut validieren.
+
+Für `UE58_RUNNER_ENABLED=true` bedeutet das:
+
+```text
+frische Readiness-Evidence
+→ Schema prüfen
+→ Evidence-Typ prüfen
+→ Status PASS prüfen
+→ alle Checks true
+→ echte UE-Version exakt 5.8
+→ Zeitstempel plausibel und höchstens 30 Minuten alt
+→ erst dann Variable setzen
+```
+
+### Grund
+
+Ein Warnhinweis wie „erst nach Readiness PASS verwenden“ ist kein technischer Schutz. Ein Nutzer, Agent oder späteres Skript könnte den Schalter trotzdem ausführen. Zusätzlich kann alte Evidence nach einer Maschinenänderung ihre Aussagekraft verlieren.
+
+### Wirkung
+
+- kein Runner-Enable ohne aktuelle maschinelle Evidence
+- keine Freigabe bei falsch benanntem UE-Verzeichnis
+- UE 5.7/5.9 werden nicht als 5.8 akzeptiert
+- stale Evidence verliert automatisch ihre Freigabewirkung
+- Zukunftszeitstempel werden als unplausibel erkannt
+- Readiness kann keinen Runtime-/CP1-PASS vortäuschen
+- die Sicherheitslogik wird in Hosted CI regressionsgetestet
+
+### Technischer Effekt
+
+`runner_readiness.py` erzeugt Schema v2 mit `generated_at_utc` und liest `Engine/Build/Build.version`. `github_p0_admin.py` besitzt einen eigenständigen Evidence-Validator und blockiert die Variable bei fehlender, alter, fehlerhafter oder nicht exakt zu UE 5.8 gehörender Evidence.
+
+`Scripts/tests/test_p0_control_plane.py` prüft unter anderem:
+
+- frische gültige Evidence → akzeptiert
+- fehlende Evidence → blockiert
+- FAIL → blockiert
+- alte Evidence → blockiert
+- unplausible Zukunft → blockiert
+- falsches Schema → blockiert
+- Runtime-Claim in Readiness → blockiert
+- falsche Engine-Version → blockiert
+- echte `Build.version` 5.8 → akzeptiert
+- 5.7 → abgelehnt
+
+Der `Quality Guard` führt diese Tests automatisch aus.
+
+### Erwarteter Nutzen
+
+**Evidence-Integrität:** sehr hoch  
+**Fehlbedienungsschutz:** sehr hoch  
+**Regressionserkennung:** sehr hoch  
+**Self-hosted-Runner-Sicherheit:** hoch  
+**Gameplay-Risiko:** keines
