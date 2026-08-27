@@ -6,7 +6,7 @@
 
 **Kategorie:** Portabilität / Launcher / Release-Qualität / Linux  
 **Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT — Hosted-CI- und Release-Abnahme noch offen  
+**Status:** 🟢 IMPLEMENTIERT + HOSTED GEPRÜFT — finaler Release-Neubau noch offen  
 **Nutzen:** 9/10  
 **Aufwand:** 2/10  
 **Risiko der Umsetzung:** 1/10
@@ -36,10 +36,10 @@ Ein Paket, dessen Inhalt korrekt ist, dessen Linux-Einstieg aber nach dem Entpac
 ### Umgesetzt
 
 - `Tests/test_cp1_package_integrity.py` prüft jetzt für alle zentralen Linux-Einstiege Existenz und Execute-Bit.
-- folgende Git-Modi werden auf `100755` gehärtet:
+- folgende Git-Modi sind auf `100755` gehärtet:
   - `START_BUNKER_BEATS_INTELLIGENT.sh`
   - `START_BUNKER_BEATS_ALL.sh`
-  - `RUN_CP1_UE58_ALL.sh` bleibt ausführbar
+  - `RUN_CP1_UE58_ALL.sh`
   - `Build/Scripts/run_cp1_smoke.sh`
 - die Prüfung läuft im bestehenden `ci_verify.py`-Pfad und wird damit bei Hosted Validate sowie vor Release-Paketierung erzwungen.
 
@@ -71,7 +71,10 @@ Git tree mode 100755
 - Environment-GUI-Contract-Tests: 10/10 PASS
 - Git-Modus-Fehler der Startskripte real im Release-Smoke gefunden
 - Regressionstest für Execute-Bits implementiert
-- Moduskorrektur/Hosted-CI/Release-Neubau dieser Iteration noch abzunehmen
+- Hosted `repository-quality`: PASS auf PR #10 inklusive Iteration Guard
+- Hosted `static-and-contract`: PASS auf PR #10 inklusive Package-Integrity-Execute-Bit-Prüfung
+- CP1 Runtime-Workflow weiterhin korrekt SKIPPED ohne reale UE-Freigabe
+- finaler Release-Neubau aus dem gemergten `main` noch offen
 - echter UE-5.8-CP1-Runtime-Lauf weiterhin `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
