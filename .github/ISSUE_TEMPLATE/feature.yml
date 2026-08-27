@@ -1,0 +1,27 @@
+name: Feature / Gameplay-Slice
+description: Kleine, testbare Erweiterung planen
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Zielzustand
+      description: Welcher beobachtbare Zustand muss am Ende existieren?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Abnahmekriterien
+      description: Messbare PASS-Kriterien, keine reine Implementierungsliste.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Abhängigkeiten / Gates
+      description: Welcher Checkpoint muss vorher grün sein?
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Geplante Evidence
+      description: Wie wird die Runtime-Wirkung technisch nachgewiesen?

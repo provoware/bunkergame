@@ -1,0 +1,16 @@
+{
+  "engine_major": "5.8",
+  "default_platform": "auto",
+  "build": {
+    "clientconfig": "Development"
+  },
+  "automation": {
+    "required_filter": "",
+    "report_directory": "Diagnostics/TestRuns/UnrealAutomation",
+    "recommended_smoke_group": "BunkerBeats.Smoke"
+  },
+  "packaging": {
+    "enabled_by_explicit_flag": true,
+    "build_cook_run": true
+  }
+}

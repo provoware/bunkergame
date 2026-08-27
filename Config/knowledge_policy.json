@@ -1,0 +1,29 @@
+{
+  "schema": "bunkerbeatz.knowledge.v1",
+  "learning_rule": {
+    "minimum_repeated_observations": 2,
+    "promote_to_preflight": true,
+    "promote_p0_when_codes": [
+      "RUNTIME-CP1-CRASH",
+      "BUILD-FAILED"
+    ],
+    "promote_p1_when_codes": [
+      "TOOLCHAIN-UE-001",
+      "TOOLCHAIN-LINUX-CLANG-001",
+      "TOOLCHAIN-LINUX-GLIBC-001",
+      "TOOLCHAIN-WINDOWS-VS-001",
+      "TOOLCHAIN-WINDOWS-SDK-001"
+    ]
+  },
+  "causal_policy": {
+    "never_call_correlation_proof": true,
+    "high_confidence_requires_reproduction": true,
+    "bisect_can_upgrade_confidence": true
+  },
+  "solution_policy": {
+    "offer_multiple_options": true,
+    "prefer_low_risk": true,
+    "never_auto_execute_systemwide_changes": true,
+    "require_revalidation_after_change": true
+  }
+}

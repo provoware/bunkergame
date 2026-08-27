@@ -1,0 +1,14 @@
+{
+  "schema": "preflight.learned.v1",
+  "generated_at": 1787825279.9963448,
+  "rules": [
+    {
+      "rule_id": "KNOW-TEST-REPEAT",
+      "source_code": "TEST-REPEAT",
+      "priority": "P2",
+      "observed_runs": 4,
+      "action": "CHECK_BEFORE_START",
+      "learned": "true"
+    }
+  ]
+}

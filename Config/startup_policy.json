@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "policy": "detect -> validate -> run -> report; never silently install or mutate system-wide dependencies",
+  "optional_unreal": true,
+  "missing_unreal_result": "BLOCKED",
+  "missing_baseline_result": "YELLOW",
+  "runtime_success_requires": "actual Unreal toolchain execution"
+}

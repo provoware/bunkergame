@@ -1,0 +1,29 @@
+name: Fehler / Regression
+description: Reproduzierbaren Fehler mit Evidence melden
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Was ist tatsächlich passiert?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduktion
+      description: Kürzeste reproduzierbare Schrittfolge.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Logs, Gate-Status, Commit-SHA, UE-Version und relevante Dateien.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Priorität
+      options: [P0 - blockiert Gate/Build, P1 - hohe Auswirkung, P2 - normal, P3 - Verbesserung]
+    validations:
+      required: true
