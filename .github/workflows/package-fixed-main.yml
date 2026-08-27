@@ -25,8 +25,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 Scripts/ci_verify.py
           python3 Scripts/repo_quality.py
+          python3 Scripts/ci_verify.py
 
       - name: Build clean complete ZIP
         shell: bash
@@ -37,6 +37,10 @@ jobs:
           STAGE="$RUNNER_TEMP/$PACKAGE_ROOT"
           rm -rf "$OUT_DIR" "$STAGE"
           mkdir -p "$OUT_DIR" "$STAGE"
+
+          rm -rf Diagnostics Binaries DerivedDataCache Intermediate Saved .pytest_cache
+          find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find . -type f -name '*.pyc' -delete
 
           rsync -a ./ "$STAGE/" \
             --exclude '.git/' \
@@ -58,12 +62,9 @@ jobs:
           Commit: 3b540300421ea96bfc6b61c5cae96010da6218b1
           Paketstatus: FIXED_P0_HARDENED
           Inhalt: vollständige versionierte Projektbasis ohne Git-Metadaten und generierte Lauf-/Cache-Daten
-          Vor Paketierung geprüft: Scripts/ci_verify.py + Scripts/repo_quality.py
+          Vor Paketierung geprüft: Scripts/repo_quality.py + Scripts/ci_verify.py
           CP1 Runtime: weiterhin nicht als real bestanden behauptet; echter UE-5.8-Lauf erforderlich.
           EOF
-
-          find "$STAGE" -type d -name '__pycache__' -prune -exec rm -rf {} +
-          find "$STAGE" -type f -name '*.pyc' -delete
 
           (cd "$RUNNER_TEMP" && zip -r -9 "$OUT_DIR/${PACKAGE_ROOT}.zip" "$PACKAGE_ROOT")
           sha256sum "$OUT_DIR/${PACKAGE_ROOT}.zip" > "$OUT_DIR/${PACKAGE_ROOT}.zip.sha256"
