@@ -1,0 +1,108 @@
+name: TEMP Append CQ-012
+
+on:
+  push:
+    branches:
+      - fix/gui-prepost-contract
+
+permissions:
+  contents: write
+
+jobs:
+  append-cq:
+    if: github.event.head_commit.message != 'chore: append CQ-012 journal entry'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/gui-prepost-contract
+          fetch-depth: 0
+
+      - name: Append CQ-012 if missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("CODEQUALITÄT.md")
+          text = path.read_text(encoding="utf-8")
+          marker = "CQ-2026-08-27-012"
+          if marker in text:
+              raise SystemExit(0)
+
+          entry = r'''
+
+          ---
+
+          ## CQ-2026-08-27-012 — GUI und Diagnose-Core über einen versionierten Vor-/Nachvalidierungsvertrag koppeln
+
+          **Iteration:** Environment Doctor Pre/Post Contract Hardening  
+          **Kategorie:** Launcher / GUI / Datenvertrag / Fail-Safe UX  
+          **Priorität:** P0  
+          **Status:** 🟢 IMPLEMENTIERT — Hosted-CI-Abnahme dieser Iteration steht noch aus  
+          **Aufwand:** 4/10  
+          **Risiko:** 2/10
+
+          ### Verbesserungsvorschlag
+
+          GUI und Reparatur-Core dürfen keine impliziten oder nur durch Konvention angenommenen Payload-Felder verwenden. Vorprüfung, Reparaturaktion und Nachvalidierung werden als expliziter, versionierter Datenvertrag modelliert und über eine reine Normalisierungsschicht an die Oberfläche übergeben.
+
+          ### Grund
+
+          Der reale Fehler `KeyError: 'after'` zeigte eine klassische Contract-Drift: `repair_gui.py` erwartete `summary.after`, während `EnvironmentAssistant.run()` dieses Feld nicht erzeugte. Eine solche Abweichung darf in einem Diagnosewerkzeug nicht erst im Tkinter-Callback auffallen.
+
+          Außerdem erzeugten `diagnostics.py` und `regression_knowledge.py` bereits beim Import Verzeichnisse im Projekt. Solche Import-Seiteneffekte erschweren reproduzierbare Tests und Paketierung.
+
+          ### Wirkung
+
+          - `before` und `after` sind explizite technische Phasen statt nur textliche Absicht
+          - Gesamtstatus wird aus der Nachvalidierung bestimmt
+          - Legacy- und Teil-Payloads werden kontrolliert dargestellt
+          - fehlende Felder führen zu Warn-/Fehlerzuständen statt Callback-Absturz
+          - Worker-Ausnahmen werden sichtbar an die GUI zurückgegeben
+          - Tkinter-Polling bleibt nach einzelnen fehlerhaften Events aktiv
+          - parallele Mehrfachstarts werden während eines laufenden Jobs verhindert
+          - reine Modulimporte verändern den Projektordner nicht mehr durch Diagnose-/Regression-Ordner
+          - der konkrete Produktionsfehler ist als Regressionstest konserviert
+
+          ### Technischer Effekt
+
+          Neu ist `Launcher/core/environment_contract.py` mit Schema-Version 2 und reinen Funktionen für Finding-Normalisierung, Statusableitung und fail-safe Payload-Auswertung. `EnvironmentAssistant` serialisiert beide Scan-Phasen; `repair_gui.py` konsumiert ausschließlich die Normalisierungsschicht statt direkt verschachtelte Dictionary-Pfade zu dereferenzieren.
+
+          `Scripts/tests/test_environment_gui_contract.py` prüft unter anderem:
+
+          - aktuelle `after`-Phase wird bevorzugt
+          - Legacy-Tupel bleiben kompatibel
+          - fehlendes `after` fällt auf `before` zurück
+          - fehlende Vor-/Nachvalidierung fällt kontrolliert auf Restprobleme zurück
+          - fehlende `summary` ergibt fail-safe RED
+          - fehlerhafte Einzelzeilen werden übersprungen statt die Darstellung zu zerstören
+          - ungültiger Gesamtstatus wird aus Findings abgeleitet
+          - Assistant liefert bei Prüflauf und Reparaturlauf immer zwei Scans
+          - Reparaturaktionen werden protokolliert und anschließend erneut validiert
+
+          Der Repository Quality Guard schützt Contract, Assistant, GUI und Regressionstest als Pflichtdateien.
+
+          ### Erwarteter Nutzen
+
+          **Robustheit:** sehr hoch  
+          **Laienfreundlichkeit:** sehr hoch  
+          **Diagnosefähigkeit:** sehr hoch  
+          **Regressionserkennung:** sehr hoch  
+          **Wartbarkeit:** sehr hoch  
+          **Gameplay-Risiko:** keines
+          '''
+          path.write_text(text.rstrip() + entry + "\n", encoding="utf-8")
+          PY
+
+          if git diff --quiet -- CODEQUALITÄT.md; then
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CODEQUALITÄT.md
+          git commit -m "chore: append CQ-012 journal entry"
+          git push origin HEAD:refs/heads/fix/gui-prepost-contract
