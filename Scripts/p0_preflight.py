@@ -36,9 +36,14 @@ BASE_STEPS = (
     Step("quality", "Repository-Qualität", (sys.executable, "Scripts/repo_quality.py")),
     Step("github", "GitHub P0 Ruleset Live-Beweis", (sys.executable, "Scripts/github_p0_public_verify.py")),
 )
+BOOTSTRAP_STEP = Step(
+    "bootstrap",
+    "UE-5.8 Runner-Bootstrap Serverbeweis",
+    (sys.executable, "Scripts/github_runner_bootstrap_public_verify.py"),
+)
 READINESS_STEP = Step(
     "readiness",
-    "UE-5.8 Runner-Bereitschaft",
+    "Lokale UE-5.8 Runner-Bereitschaft",
     (sys.executable, "Scripts/runner_readiness.py"),
 )
 
@@ -52,6 +57,10 @@ def run_step(step: Step) -> StepResult:
 def failed(results: list[StepResult], key: str) -> bool:
     item = next((result for result in results if result.step.key == key), None)
     return item is None or not item.passed
+
+
+def find_result(results: list[StepResult], key: str) -> StepResult | None:
+    return next((result for result in results if result.step.key == key), None)
 
 
 def next_action(results: list[StepResult], include_readiness: bool) -> str:
@@ -68,11 +77,20 @@ def next_action(results: list[StepResult], include_readiness: bool) -> str:
             "python3 Scripts/github_p0_admin.py --apply-ruleset anwenden."
         )
     if not include_readiness:
-        return "Auf der UE-5.8-Maschine fortsetzen: python3 Scripts/p0_preflight.py --full"
+        return (
+            "Self-hosted Runner registrieren; danach GitHub Actions → `UE 5.8 Runner Bootstrap Acceptance` "
+            "auf main manuell ausführen und anschließend python3 Scripts/p0_preflight.py --full starten."
+        )
+    bootstrap = find_result(results, "bootstrap")
+    if bootstrap is not None and not bootstrap.passed:
+        return (
+            "GitHub Actions → `UE 5.8 Runner Bootstrap Acceptance` auf main manuell ausführen. "
+            "Erst ein frischer UE58_RUNNER_BOOTSTRAP: PASS darf die Runner-Aktivierung freigeben."
+        )
     if failed(results, "readiness"):
-        return "UE-Maschine reparieren und Readiness erneut ausführen."
+        return "Lokale UE-Maschine reparieren und Readiness erneut ausführen."
     return (
-        "Alle Vorbedingungen sind PASS. Frische Evidence jetzt mit "
+        "Alle Vorbedingungen sind PASS. Runner jetzt nur über "
         "python3 Scripts/github_p0_admin.py --apply-ruleset --enable-runner-variable freigeben; "
         "danach CP1 UE 5.8 Runtime ausführen."
     )
@@ -98,17 +116,19 @@ def main() -> int:
     parser.add_argument(
         "--full",
         action="store_true",
-        help="zusätzlich lokale UE-5.8 Runner-Readiness prüfen; auf der UE-Maschine verwenden",
+        help="zusätzlich öffentlichen Runner-Bootstrap-Beweis und lokale UE-5.8-Readiness prüfen",
     )
     args = parser.parse_args()
 
     print("=== BUNKER BEATS P0 PREFLIGHT ===")
     print("Modus: READ-ONLY — dieses Skript ändert keine GitHub-Einstellungen.")
     print("GitHub-Schutzbeweis: öffentliches Ruleset direkt von api.github.com, ohne Token.")
+    if args.full:
+        print("Runner-Beweis: öffentlicher GitHub Workflow-/Job-Status + lokale Readiness v3.")
 
     steps = list(BASE_STEPS)
     if args.full:
-        steps.append(READINESS_STEP)
+        steps.extend((BOOTSTRAP_STEP, READINESS_STEP))
 
     return summary([run_step(step) for step in steps], args.full)
 

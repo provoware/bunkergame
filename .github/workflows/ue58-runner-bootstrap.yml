@@ -1,0 +1,40 @@
+name: UE 5.8 Runner Bootstrap Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ue58-runner-bootstrap-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  runner-bootstrap-acceptance:
+    runs-on: [self-hosted, unreal, ue-5.8]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: true
+          ref: ${{ github.sha }}
+
+      - name: UE 5.8 runner readiness v3
+        run: python3 Scripts/runner_readiness.py
+
+      - name: Bind runner bootstrap evidence
+        if: always()
+        run: python3 Scripts/runner_bootstrap_evidence.py
+
+      - name: Upload runner bootstrap evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ue58-runner-bootstrap-${{ github.sha }}-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            Diagnostics/Runtime/runner_readiness.json
+            Diagnostics/Runtime/runner_bootstrap_evidence.json

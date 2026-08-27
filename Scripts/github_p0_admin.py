@@ -25,6 +25,7 @@ from github_p0_ruleset import (
     find_named_ruleset,
     ruleset_payload,
 )
+from github_runner_bootstrap_public_verify import verify_public_runner_bootstrap
 from runner_identity import (
     EXPECTED_REPOSITORY,
     current_git_head,
@@ -250,6 +251,7 @@ def show_plan() -> None:
     print("- offene Review-Diskussionen blockieren")
     print("- Force-Push gesperrt")
     print("- Branch-Löschen gesperrt")
+    print("\nRunner-Freigabe: nur nach frischem öffentlichen UE58_RUNNER_BOOTSTRAP: PASS auf aktuellem main")
     print("\nAlternative/Legacy: klassische Branch Protection über --apply")
     print("Nicht global required: cp1-runtime")
     print("Grund: Der UE-5.8-Self-hosted-Runner ist noch nicht dauerhaft verfügbar.")
@@ -384,6 +386,7 @@ def verify() -> bool:
 
 
 def validate_fresh_readiness(report_path: Path = READINESS_REPORT) -> tuple[bool, str]:
+    """Legacy/local diagnostic validator. Runner activation no longer trusts this file alone."""
     if not report_path.is_file():
         return False, f"Readiness-Evidence fehlt: {report_path}"
     try:
@@ -419,21 +422,48 @@ def validate_fresh_readiness(report_path: Path = READINESS_REPORT) -> tuple[bool
     return True, detail + "; aktueller Worktree erneut sauber bestätigt"
 
 
+def validate_activation_checkout(expected_main_sha: str) -> tuple[bool, str]:
+    repository, repository_detail = current_repository_identity(ROOT)
+    if repository != EXPECTED_REPOSITORY:
+        return False, f"Admin-Checkout ist nicht {EXPECTED_REPOSITORY}: {repository_detail}"
+
+    head, head_detail = current_git_head(ROOT)
+    if head is None:
+        return False, f"Admin-Checkout-HEAD ist nicht bindbar: {head_detail}"
+    if head != expected_main_sha:
+        return False, f"Admin-Checkout steht nicht auf aktuellem main: lokal={head}, GitHub={expected_main_sha}"
+
+    clean, clean_detail = git_worktree_clean(ROOT)
+    if not clean:
+        return False, f"Admin-Checkout ist nicht sauber: {clean_detail}"
+    return True, f"Admin-Checkout ist sauber und exakt auf aktuellem main {expected_main_sha}"
+
+
 def set_runner_variable() -> None:
-    ready, detail = validate_fresh_readiness()
-    if not ready:
+    bootstrap_ok, bootstrap_detail, proof = verify_public_runner_bootstrap()
+    if not bootstrap_ok or not isinstance(proof, dict):
         raise RuntimeError(
-            "UE58_RUNNER_ENABLED bleibt gesperrt. " + detail +
-            "\nZuerst auf derselben UE-Maschine und demselben sauberen Checkout `python3 Scripts/runner_readiness.py` erfolgreich ausführen."
+            "UE58_RUNNER_ENABLED bleibt gesperrt. Kein frischer serverseitig bestätigter Runner-Bootstrap. "
+            + bootstrap_detail
+            + "\nZuerst GitHub Actions → `UE 5.8 Runner Bootstrap Acceptance` auf `main` manuell erfolgreich ausführen."
         )
-    print(f"[PASS] {detail}")
+    main_sha = proof.get("main_sha")
+    if not isinstance(main_sha, str):
+        raise RuntimeError("UE58_RUNNER_ENABLED bleibt gesperrt. Bootstrap-Proof enthält keinen gültigen main-SHA.")
+
+    checkout_ok, checkout_detail = validate_activation_checkout(main_sha)
+    if not checkout_ok:
+        raise RuntimeError("UE58_RUNNER_ENABLED bleibt gesperrt. " + checkout_detail)
+
+    print(f"[PASS] {bootstrap_detail}")
+    print(f"[PASS] {checkout_detail}")
     result = run(
         ["gh", "variable", "set", "UE58_RUNNER_ENABLED", "--repo", REPO, "--body", "true"],
         check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(describe_failure("Repository-Variable setzen", result.stderr))
-    print("[PASS] UE58_RUNNER_ENABLED=true gesetzt.")
+    print("[PASS] UE58_RUNNER_ENABLED=true gesetzt — serverseitiger Bootstrap-Proof war frisch und aktuell.")
 
 
 def main() -> int:
@@ -445,7 +475,7 @@ def main() -> int:
     parser.add_argument(
         "--enable-runner-variable",
         action="store_true",
-        help="UE58_RUNNER_ENABLED=true setzen; verlangt frische, checkout- und maschinengebundene RUNNER_READINESS: PASS Evidence",
+        help="UE58_RUNNER_ENABLED=true setzen; verlangt frischen öffentlichen Runner-Bootstrap-PASS auf aktuellem main",
     )
     args = parser.parse_args()
 
@@ -458,6 +488,11 @@ def main() -> int:
 
     if args.doctor:
         return 0 if admin_preflight() else 3
+
+    if args.enable_runner_variable and not args.apply_ruleset:
+        print("[BLOCKED] Runner-Aktivierung ist nur zusammen mit --apply-ruleset erlaubt.")
+        print("Grund: Vor der Runtime-Freigabe muss der unabhängig prüfbare P0-Ruleset-Pfad aktiv und rückgelesen sein.")
+        return 3
 
     if not args.apply and not args.apply_ruleset:
         print("\nKeine Änderung durchgeführt.")

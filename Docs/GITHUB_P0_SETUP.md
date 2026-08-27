@@ -1,6 +1,6 @@
 # BUNKER BEATS — GITHUB P0 SETUP
 
-> Ziel: `main` absichern, den Schutz **unabhängig beweisbar** machen und danach den UE-5.8-Self-hosted-Runner kontrolliert aktivieren.
+> Ziel: `main` absichern, den Schutz unabhängig beweisen, einen echten UE-5.8-Self-hosted-Runner **durch GitHub selbst** abnehmen und erst danach CP1 freigeben.
 
 ---
 
@@ -13,144 +13,92 @@ Admin-Doctor PASS
    ↓
 aktives Repository Ruleset für main
    ↓
-öffentlicher Ruleset-Live-Beweis PASS
+GITHUB_P0_PUBLIC_RULESET: PASS
    ↓
-GitHub-Infrastruktur-Evidence PASS
+GITHUB_P0_EVIDENCE: PASS
    ↓
-Self-hosted UE-5.8 Runner
+Self-hosted Runner registrieren
    ↓
-Runner Readiness Schema v3 PASS
+manuellen "UE 5.8 Runner Bootstrap Acceptance" auf main starten
    ↓
-gleicher Checkout + gleiche Maschine + sauberer Worktree erneut bestätigt
+GitHub weist [self-hosted, unreal, ue-5.8] tatsächlich zu
+   ↓
+Readiness Schema v3 läuft auf diesem Runner
+   ↓
+UE58_RUNNER_BOOTSTRAP: PASS
+   ↓
+Admin-Checkout = aktueller main + sauber
    ↓
 UE58_RUNNER_ENABLED=true
    ↓
 echter CP1 Runtime-Lauf
+   ↓
+CP1_GATE: GREEN
 ```
 
-### Ein-Befehl-Einstieg
+### Read-only Einstieg
 
 ```bash
 python3 Scripts/p0_preflight.py
 ```
 
-Auf der echten UE-5.8-Maschine:
+Vollprüfung nach einem Bootstrap-Lauf:
 
 ```bash
 python3 Scripts/p0_preflight.py --full
 ```
 
-Der Preflight ist read-only. Sein GitHub-Schutzschritt verwendet `github_p0_public_verify.py` und liest das öffentliche Ruleset **ohne GitHub-Login oder Token** direkt von GitHub.
-
-`P0_PREFLIGHT: PASS` ist niemals ein CP1-Runtime-PASS.
+`P0_PREFLIGHT: PASS`, `RUNNER_READINESS: PASS` und `UE58_RUNNER_BOOTSTRAP: PASS` sind ausdrücklich **keine CP1-Runtime-Pässe**.
 
 ---
 
-## 2. WARUM RULESET STATT NUR KLASSISCHER BRANCH PROTECTION?
+## 2. P0-RULESET
 
-Die klassische Branch-Protection bleibt unterstützt. Ihr Detail-Endpunkt kann für bestimmte GitHub-Apps oder Token jedoch mit 403 gesperrt sein. Dadurch kann eine zweite Stelle den vollständigen Schutz nicht immer unabhängig nachprüfen.
-
-Repository Rulesets haben hier einen wichtigen Vorteil: GitHub erlaubt ihre Ansicht bereits mit Repository-Lesezugriff. Deshalb wird der P0-Schutz bevorzugt als Ruleset angelegt.
-
-```text
-privilegierter Schreibweg
-→ GitHub speichert Ruleset
-
-unabhängiger Lesepfad
-→ Ruleset-Liste lesen
-→ Ruleset-Detail lesen
-→ denselben P0-Contract prüfen
-```
-
-Testdateien dürfen den Validator testen. Sie können aber keinen Live-Server-PASS erzeugen.
-
----
-
-## 3. P0-RULESET-SOLL
-
-Name:
+Bevorzugter Schutz:
 
 ```text
 BUNKER BEATS P0 main gate
 ```
 
-Ziel:
+Verbindlicher Vertrag:
 
-```text
-refs/heads/main
-```
-
-Enforcement:
-
-```text
-active
-```
-
-Verbindliche Regeln:
-
+- `enforcement=active`
+- ausschließlich `refs/heads/main`
 - Pull Request vor Integration
-- keine fremde Approval-Pflicht im Solo-Repository (`required_approving_review_count=0`)
+- `required_approving_review_count=0` für das Solo-Repository
 - alte Reviews bei neuen Änderungen verwerfen
 - offene Review-Diskussionen müssen gelöst sein
-- `static-and-contract` required
-- `repository-quality` required
+- Required Check `static-and-contract`
+- Required Check `repository-quality`
 - Branch vor Merge aktuell halten
-- Force-Push sperren (`non_fast_forward`)
-- Löschen von `main` sperren (`deletion`)
+- Force-Push sperren
+- Löschen von `main` sperren
 - keine Bypass-Akteure
+- `cp1-runtime` noch nicht global required
 
-`cp1-runtime` bleibt noch **nicht** global required, solange der echte UE-5.8-Runner nicht dauerhaft stabil verfügbar ist.
-
-Der vollständige Sollvertrag liegt zentral in:
+Zentrale Vertragslogik:
 
 ```text
 Scripts/github_p0_ruleset.py
 ```
 
-Admin-Tool, Status-Tool, öffentlicher Verifier und Regressionstests benutzen denselben Contract.
-
----
-
-## 4. SICHERER ADMIN-ABLAUF
-
-### Schritt 1 — nur diagnostizieren
+### Sicher anwenden
 
 ```bash
 python3 Scripts/github_p0_admin.py --doctor
 ```
 
-Ziel:
+Nur bei:
 
 ```text
 GITHUB_ADMIN_PREFLIGHT: PASS
 ```
 
-Geprüft werden unter anderem:
-
-- `gh` vorhanden
-- `gh` angemeldet
-- Repository exakt `provoware/bunkergame`
-- Repository nicht archiviert
-- `permissions.admin == true`
-- `main` vorhanden
-- Ruleset-Lesepfad erreichbar
-- keine doppelten gleichnamigen P0-Rulesets
-
-### Schritt 2 — empfohlenes Ruleset anwenden
+weiter:
 
 ```bash
 python3 Scripts/github_p0_admin.py --apply-ruleset
 ```
-
-Das ist ein sicheres Upsert:
-
-```text
-0 Rulesets mit Sollname → neu anlegen
-1 Ruleset mit Sollname  → aktualisieren
->1 Rulesets             → BLOCKED, keine automatische Änderung
-```
-
-Nach dem Schreiben liest das Tool das Ruleset erneut von GitHub und validiert es mit demselben Contract.
 
 Ziel:
 
@@ -158,27 +106,25 @@ Ziel:
 GITHUB_P0_RULESET_GATE: PASS
 ```
 
-### Klassische Alternative
+Das Ruleset wird als sicheres Upsert behandelt:
 
-Nur falls Rulesets bewusst nicht verwendet werden sollen:
-
-```bash
-python3 Scripts/github_p0_admin.py --apply
+```text
+0 Soll-Rulesets → Create
+1 Soll-Ruleset  → Update
+>1              → BLOCKED
 ```
 
-Das setzt weiterhin die klassische Branch Protection.
+Klassische Branch Protection bleibt mit `--apply` nur als Fallback erhalten.
 
 ---
 
-## 5. UNABHÄNGIGER LIVE-BEWEIS — OHNE TOKEN
+## 3. UNABHÄNGIGER GITHUB-SCHUTZBEWEIS
 
-Auf **jedem** Rechner mit Python und Internetzugang:
+Ohne GitHub-Login oder Admin-Token:
 
 ```bash
 python3 Scripts/github_p0_public_verify.py
 ```
-
-Das Skript verwendet nur Python-Standardbibliothek und öffentliche GitHub-REST-Endpunkte.
 
 Ziel:
 
@@ -186,112 +132,32 @@ Ziel:
 GITHUB_P0_PUBLIC_RULESET: PASS
 ```
 
-PASS entsteht nur, wenn GitHub live ein Ruleset zurückliefert, das exakt den P0-Vertrag erfüllt.
-
-Folgende Zustände bleiben INCOMPLETE:
-
-- Ruleset fehlt
-- Ruleset heißt falsch
-- mehrere gleichnamige Rulesets
-- `enforcement=evaluate`
-- falscher Branchbereich
-- Bypass-Akteur vorhanden
-- Required Check fehlt oder zusätzlicher unerwarteter Check vorhanden
-- Strictness aus
-- Pull-Request-Regel unvollständig
-- Force-Push-Sperre fehlt
-- Delete-Sperre fehlt
-- unerwartete Zusatzregel vorhanden
-
-Damit kann eine lokale Testfixture keinen Live-PASS vortäuschen.
-
-### Maschinenlesbares Infrastruktur-Bundle
-
-Für archivierte Evidence zusätzlich:
+Archivierte Infrastruktur-Evidence:
 
 ```bash
 python3 Scripts/github_p0_evidence.py
 python3 Scripts/github_p0_evidence_validate.py
 ```
 
-Der zweite Befehl akzeptiert den gespeicherten PASS niemals allein, sondern liest GitHub erneut und verlangt denselben aktuellen `main`-SHA sowie denselben vollständigen Ruleset-Vertrag.
-
-Detailanleitung:
+Ziel:
 
 ```text
-Docs/P0_INFRASTRUCTURE_EVIDENCE.md
+GITHUB_P0_EVIDENCE: PASS
 ```
+
+Der Validator akzeptiert gespeicherte Evidence niemals allein. Er liest GitHub erneut live und verlangt weiterhin denselben aktuellen `main`-SHA, dieselbe Ruleset-ID und denselben vollständigen Vertrag.
+
+Detail: `Docs/P0_INFRASTRUCTURE_EVIDENCE.md`.
 
 ---
 
-## 6. AUTOMATISCHER EXTERNER INFRASTRUKTUR-OBSERVER
-
-Workflow:
-
-```text
-.github/workflows/p0-infrastructure-observer.yml
-```
-
-Er läuft:
-
-- täglich geplant
-- manuell über `workflow_dispatch`
-- auf einem GitHub-hosted Runner
-- ohne Self-hosted Runner
-- ohne Admin-Secret
-- ohne GitHub-CLI-Anmeldung
-
-Jobname:
-
-```text
-p0-infrastructure-evidence
-```
-
-Der Observer sammelt ein JSON-Bundle, revalidiert es live und lädt es auch bei FAIL als Artifact hoch. Erst danach wird der Jobstatus erzwungen.
-
-Bis das echte Ruleset aktiv ist, darf dieser Observer rot sein. Das ist kein Fehler der Testlogik, sondern wahrheitsgemäße Infrastruktur-Evidence.
-
-Nach erfolgreichem Ruleset-Apply wird der Observer zum zweiten, externen PASS-Beweis.
-
----
-
-## 7. ERWEITERTER AUTHENTIFIZIERTER STATUS
-
-```bash
-python3 Scripts/github_p0_status.py
-```
-
-Dieser read-only Prüfer arbeitet Ruleset-first und fällt bei Bedarf auf klassische Branch Protection zurück.
-
-Zusätzlich versucht er zu lesen:
-
-- `UE58_RUNNER_ENABLED`
-- Self-hosted Runner mit `self-hosted`, `unreal`, `ue-5.8`
-
-Mögliche Evidence-Pfade:
-
-```text
-GITHUB_P0_EVIDENCE_PATH: RULESET
-GITHUB_P0_EVIDENCE_PATH: CLASSIC_PROTECTION
-GITHUB_P0_EVIDENCE_PATH: NONE
-```
-
-Bevorzugtes Ziel:
-
-```text
-GITHUB_P0_EVIDENCE_PATH: RULESET
-GITHUB_P0_BRANCH_GATE: PASS
-```
-
----
-
-## 8. SELF-HOSTED UE-5.8 RUNNER
+## 4. SELF-HOSTED UE-5.8-RUNNER REGISTRIEREN
 
 GitHub:
 
 `Repository → Settings → Actions → Runners → New self-hosted runner`
 
-GitHubs aktuell erzeugte Setup-Befehle verwenden. Keine feste Runner-Version in die Projektdokumentation übernehmen.
+Die **von GitHub aktuell erzeugten** Installations-/Registrierungsbefehle verwenden. Keine alte Runner-Version aus einer Dokumentation kopieren.
 
 Zusätzliche Labels:
 
@@ -300,36 +166,91 @@ unreal
 ue-5.8
 ```
 
-GitHub setzt `self-hosted` automatisch.
+GitHub ergänzt `self-hosted` automatisch.
 
-Registrierungstoken niemals in Git, Issues, Markdown, Screenshots oder Logs speichern.
+Registrierungstoken niemals in Git, Markdown, Issues, Screenshots oder Logs speichern.
 
 ---
 
-## 9. RUNNER-READINESS — SCHEMA v3
+## 5. SERVERVERMITTELTE RUNNER-ABNAHME
 
-Auf der echten UE-Maschine und im **sauberen Projektcheckout**:
+Nach Registrierung wird **noch kein CP1 gestartet**.
 
-```bash
-python3 Scripts/p0_preflight.py --full
+Stattdessen in GitHub Actions manuell starten:
+
+```text
+UE 5.8 Runner Bootstrap Acceptance
 ```
 
-Die Readiness prüft unter anderem:
+Der Workflow liegt in:
 
-- Projektdatei
+```text
+.github/workflows/ue58-runner-bootstrap.yml
+```
+
+Er besitzt bewusst nur:
+
+```yaml
+on:
+  workflow_dispatch:
+```
+
+und der Job verlangt:
+
+```text
+[self-hosted, unreal, ue-5.8]
+```
+
+### Was GitHub damit beweisen muss
+
+Ein erfolgreicher Lauf zeigt, dass GitHub:
+
+1. das Repository und den aktuellen `main`-SHA kennt,
+2. einen passenden Self-hosted Runner findet,
+3. den Job tatsächlich an ihn zustellt,
+4. einen echten `runner_name` zurückliefert,
+5. die benötigten Job-Labels bestätigt,
+6. `runner_readiness.py` dort erfolgreich ausführt,
+7. die Bootstrap-Evidence erzeugt und als Artifact hochlädt.
+
+### Was der Workflow ausdrücklich NICHT tut
+
+- kein UE-Projektbuild
+- kein Character Spawn
+- kein Movement-Test
+- kein CP1-Gate
+- kein `UE58_RUNNER_ENABLED=true`
+- keine GitHub-Adminänderung
+
+Damit ist der Bootstrap eine eigene sichere Infrastruktur-Stufe.
+
+---
+
+## 6. RUNNER-READINESS — SCHEMA v3
+
+Im Bootstrap läuft:
+
+```bash
+python3 Scripts/runner_readiness.py
+```
+
+Readiness prüft unter anderem:
+
+- `BunkerBeats.uproject`
 - Editor-Target
-- UE-Pfad
+- UE-Root
 - UnrealEditor
-- Build-Skript
-- echte Version aus `Engine/Build/Build.version`
+- UE-Build-Skript
+- echte `Engine/Build/Build.version`
 - exakt UE 5.8
 - Python
-- Schreibrechte
-- mindestens 5 GB frei
-- sauberer Git-Arbeitsstand
-- Git-Remote gehört exakt zu `provoware/bunkergame`
-- vollständiger aktueller Git-HEAD ist bestimmbar
-- pseudonymer Maschinenfingerprint ist bestimmbar
+- Schreibbarkeit des Repositories
+- mindestens 5 GB freien Speicher
+- sauberen Git-Arbeitsstand
+- Repository exakt `provoware/bunkergame`
+- vollständigen 40-stelligen Git-HEAD
+- pseudonymen Maschinenfingerprint
+- exakt definierten Pflichtcheck-Satz
 
 Evidence:
 
@@ -337,124 +258,225 @@ Evidence:
 Diagnostics/Runtime/runner_readiness.json
 ```
 
-Schema v3 bindet die Evidence an:
+Der Maschinenfingerprint ist SHA-256 aus Hostname, OS und Architektur. Er ist **keine Hardware-Attestation** und enthält keine Hardware-Seriennummer.
 
-```text
-repository
-+ git_head_sha
-+ machine_fingerprint_sha256
-+ machine_identity_scheme
-+ exakt definierter vollständiger Check-Satz
-```
-
-Der Maschinenfingerprint ist ein SHA-256 aus Hostname, Betriebssystem und Architektur. Er ist **keine Hardware-Attestation** und speichert keine Hardware-Seriennummer. Sein Zweck ist Kontextbindung und Vermeidung einfacher Evidence-Verwechslung zwischen Maschinen.
-
-Der Pflichtcheck-Satz wird zentral in `Scripts/runner_readiness_contract.py` definiert. Fehlende oder zusätzliche Checks blockieren die Freigabe.
-
-Nur frische PASS-Evidence, maximal 30 Minuten alt, darf die Runner-Freigabe ermöglichen.
-
-`RUNNER_READINESS: PASS` beweist nur Maschinenbereitschaft. Es ist ausdrücklich noch kein UE-Build-/CP1-PASS.
+`RUNNER_READINESS: PASS` beweist Maschinenbereitschaft, nicht CP1.
 
 ---
 
-## 10. RUNNER-VARIABLE FREIGEBEN — KONTEXT ERNEUT PRÜFEN
+## 7. BOOTSTRAP-EVIDENCE
 
-Bevorzugt auf **derselben UE-Maschine, demselben Checkout und direkt nach frischer Readiness**:
+Nach Readiness erzeugt der Workflow:
+
+```text
+Diagnostics/Runtime/runner_bootstrap_evidence.json
+```
+
+über:
+
+```bash
+python3 Scripts/runner_bootstrap_evidence.py
+```
+
+Das Bundle bindet unter anderem:
+
+- Repository
+- `refs/heads/main`
+- GitHub-Dispatch-SHA
+- lokalen Checkout-SHA
+- Workflowname
+- Jobname
+- Run-ID
+- Run-Attempt
+- Runnername
+- Runner-OS/-Architektur
+- Maschinenfingerprint
+- Readiness-Datei + SHA-256
+- Readiness-v3-Validierung
+
+und hält zwingend getrennt:
+
+```text
+runtime_executed=false
+cp1_pass=false
+```
+
+Das Artifact wird auch bei Fehlern hochgeladen, damit Diagnose-Evidence nicht mit dem Fehlschlag verschwindet.
+
+---
+
+## 8. UNABHÄNGIGER RUNNER-SERVERBEWEIS
+
+Nach dem manuellen Bootstrap:
+
+```bash
+python3 Scripts/github_runner_bootstrap_public_verify.py
+```
+
+Der Verifier benötigt keinen Admin-Token und liest GitHub live zurück:
+
+```text
+aktueller main-SHA
+→ Workflow-Runs für UE 5.8 Runner Bootstrap Acceptance
+→ nur workflow_dispatch
+→ nur aktueller main-SHA
+→ neuesten passenden Lauf wählen
+→ completed + success
+→ zugehörige Jobs lesen
+→ genau runner-bootstrap-acceptance
+→ runner_name vorhanden
+→ Labels enthalten self-hosted + unreal + ue-5.8
+→ Checkout/Readiness/Bind/Upload-Schritte erfolgreich
+→ Freshness ≤ 30 Minuten
+```
+
+Nur dann:
+
+```text
+UE58_RUNNER_BOOTSTRAP: PASS
+```
+
+### Wichtige Fail-closed-Regel
+
+Ein älterer erfolgreicher Lauf darf einen **neueren fehlgeschlagenen Lauf auf demselben aktuellen `main`** nicht verdecken. Der neueste passende Lauf ist maßgeblich.
+
+Ein Bootstrap eines alten `main`-SHA verliert nach einem neuen Merge automatisch seine Aktivierungswirkung.
+
+---
+
+## 9. P0-PREFLIGHT --FULL
+
+Nach dem Bootstrap:
+
+```bash
+python3 Scripts/p0_preflight.py --full
+```
+
+Reihenfolge:
+
+```text
+Branch Lifecycle
+→ Static Contract
+→ Repository Quality
+→ Public Ruleset Live Verify
+→ Public Runner Bootstrap Verify
+→ lokale Runner Readiness v3
+→ Next Best Action
+```
+
+Fehlt der Bootstrap-PASS, empfiehlt der Preflight **nicht** die Runner-Aktivierung, sondern zuerst den manuellen Bootstrap-Workflow.
+
+---
+
+## 10. RUNNER-VARIABLE FREIGEBEN
+
+Der Aktivierungspfad wurde bewusst entkoppelt: Ein lokales `runner_readiness.json` ist **nicht mehr alleinige Aktivierungsautorität**.
+
+Nach frischem `UE58_RUNNER_BOOTSTRAP: PASS` auf dem aktuellen `main`:
 
 ```bash
 python3 Scripts/github_p0_admin.py --apply-ruleset --enable-runner-variable
 ```
 
-Das Ruleset wird idempotent erneut geprüft/aktualisiert. Danach wird die lokale Readiness-Evidence nicht nur gelesen, sondern gegen den **jetzt aktuellen Kontext** geprüft:
+Der Helper verlangt:
 
 ```text
-Repository jetzt
-→ muss weiterhin provoware/bunkergame sein
-
-Git-HEAD jetzt
-→ muss exakt Evidence-HEAD sein
-
-Maschinenfingerprint jetzt
-→ muss exakt Evidence-Fingerprint sein
-
-Worktree jetzt
-→ muss erneut sauber sein
-
-Evidence
-→ Schema v3
-→ vollständiger Check-Satz
-→ UE exakt 5.8
-→ maximal 30 Minuten alt
+Adminrecht
+→ P0 Ruleset anwenden/rücklesen
+→ Public Runner Bootstrap erneut live prüfen
+→ Bootstrap muss auf aktuellem main liegen
+→ Bootstrap ≤ 30 Minuten
+→ Admin-Checkout Repository exakt
+→ Admin-Checkout HEAD == aktueller main-SHA
+→ Admin-Worktree sauber
+→ erst dann UE58_RUNNER_ENABLED=true
 ```
 
-Erst danach wird gesetzt:
+`--enable-runner-variable` ohne `--apply-ruleset` wird blockiert.
 
-```text
-UE58_RUNNER_ENABLED=true
-```
-
-Damit blockieren auch uncommittete Änderungen nach dem Readiness-Lauf die Freigabe, obwohl sich der Git-HEAD dabei nicht geändert hätte.
+Vorteil: Das Admin-Terminal muss nicht mehr im selben Runner-Workspace liegen. GitHub ist die Vermittlungs- und Beweisinstanz für die Runner-Abnahme.
 
 ---
 
 ## 11. ERSTER ECHTER CP1-LAUF
 
-Workflow:
+Erst nach Runner-Aktivierung:
 
 ```text
 CP1 UE 5.8 Runtime
 ```
 
-Beweiskette:
+oder auf der Zielmaschine über den kanonischen Orchestrator:
 
-```text
-Runner Readiness v3
-→ Repository Preflight
-→ UE 5.8 Build
-→ Character Spawn
-→ Movement
-→ Telemetrie
-→ CP1 Gate
-→ Runtime Artifact
+```bash
+python3 Scripts/run_cp1_ue58.py
 ```
 
-Erst dieser Lauf darf CP1 GREEN machen.
+Beweiskette Runtime v3:
+
+```text
+Readiness
+→ Preflight
+→ alte Runtime-Artefakte sicher entfernen
+→ zufällige run_id
+→ UE 5.8 Build
+→ Unreal erhält run_id
+→ Character Spawn + Movement
+→ Unreal schreibt Telemetrie v3 + run_id
+→ Telemetrie-Datei SHA-256
+→ Runtime Evidence v3
+→ Gate liest Kontext + reale Telemetrie erneut
+→ CP1_GATE: GREEN / RED / BLOCKED
+```
+
+Nur `CP1_GATE: GREEN` aus dem echten Lauf darf CP1 auf GREEN setzen.
 
 ---
 
 ## 12. ABNAHME-CHECKLISTE
 
+### GitHub-Schutz
 - [ ] `static-and-contract` PASS
 - [ ] `repository-quality` PASS
 - [ ] `GITHUB_ADMIN_PREFLIGHT: PASS`
-- [ ] genau ein P0-Ruleset mit Sollname vorhanden
+- [ ] genau ein P0-Ruleset vorhanden
 - [ ] Ruleset `active`
 - [ ] nur `main` erfasst
 - [ ] keine Bypass-Akteure
-- [ ] Pull Request erforderlich
-- [ ] Review-Diskussionen müssen gelöst sein
+- [ ] PR-Gate aktiv
 - [ ] `static-and-contract` required
 - [ ] `repository-quality` required
-- [ ] Branch vor Merge aktuell
+- [ ] Strictness aktiv
 - [ ] Force-Push gesperrt
 - [ ] Löschen von `main` gesperrt
 - [ ] `GITHUB_P0_PUBLIC_RULESET: PASS`
 - [ ] `GITHUB_P0_EVIDENCE: PASS`
-- [ ] Hosted `P0 Infrastructure Observer` PASS
+
+### Runner-Bootstrap
 - [ ] Self-hosted Runner registriert
-- [ ] Labels `unreal`, `ue-5.8` vorhanden
-- [ ] Runner online/idle
-- [ ] Readiness-Schema v3 erzeugt
-- [ ] Repository-Bindung korrekt
-- [ ] Git-HEAD-Bindung korrekt
-- [ ] Maschinenfingerprint vorhanden
-- [ ] exakt vollständiger Pflichtcheck-Satz PASS
-- [ ] `RUNNER_READINESS: PASS`
-- [ ] Readiness-Evidence höchstens 30 Minuten alt
-- [ ] Worktree unmittelbar vor Enable erneut sauber
-- [ ] `UE58_RUNNER_ENABLED=true` erst danach
-- [ ] echter CP1-Lauf ausgeführt
-- [ ] Runtime-Evidence geprüft
+- [ ] Labels `unreal`, `ue-5.8` gesetzt
+- [ ] `UE 5.8 Runner Bootstrap Acceptance` auf `main` manuell gestartet
+- [ ] GitHub weist echten `runner_name` aus
+- [ ] Readiness Schema v3 PASS
+- [ ] Bootstrap Artifact vorhanden
+- [ ] `UE58_RUNNER_BOOTSTRAP: PASS`
+- [ ] Bootstrap höchstens 30 Minuten alt
+- [ ] Bootstrap gehört zum aktuellen `main`-SHA
+
+### Aktivierung
+- [ ] Admin-Checkout exakt `provoware/bunkergame`
+- [ ] Admin-HEAD exakt aktueller `main`
+- [ ] Admin-Worktree sauber
+- [ ] `--apply-ruleset --enable-runner-variable` erfolgreich
+- [ ] `UE58_RUNNER_ENABLED=true`
+
+### CP1 Runtime
+- [ ] echter UE-5.8-Build
+- [ ] echter Character Spawn
+- [ ] echte Bewegung
+- [ ] Telemetrie v3
+- [ ] Runtime Evidence v3
+- [ ] `CP1_GATE: GREEN`
 
 ---
 

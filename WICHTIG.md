@@ -2,131 +2,122 @@
 
 > Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
 
-## W-2026-08-27-010 — Runtime-Evidence an realen Lauf und Telemetrie-Datei binden
+## W-2026-08-27-011 — Self-hosted Runner durch echten GitHub-Job beweisen
 
-**Kategorie:** CP1 Runtime / Evidence Integrity / No-Fake-Success  
+**Kategorie:** Self-hosted Runner / Infrastructure Evidence / No-Fake-Success  
 **Priorität:** P0  
-**Status:** 🟡 IMPLEMENTIERT — Hosted-Abnahme und echter UE-5.8-Lauf noch offen  
+**Status:** 🟢 IMPLEMENTIERT — realer Bootstrap-Lauf weiterhin extern offen  
 **Nutzen:** 10/10  
-**Aufwand:** 5/10  
-**Risiko der Umsetzung:** 3/10
+**Aufwand:** 4/10  
+**Risiko der Umsetzung:** 2/10
 
 ### Beobachtung
 
-Die bisherige CP1-Runtime-Evidence v2 löschte zwar alte Telemetrie vor einem Lauf, war aber selbst noch nicht ausreichend gegen Wiederverwendung abgesichert. `CP1_runtime_evidence.json` war nicht an Repository, Git-HEAD oder Maschine gebunden. Das Gate prüfte weder Freshness noch Runtime-/Telemetrie-Schema und verglich die eingebettete Telemetrie nicht mit der tatsächlich auf der Platte liegenden Unreal-Datei.
+Bisher konnte die lokale Readiness sehr genau beweisen, dass **eine Maschine** für UE 5.8 vorbereitet ist. Sie beweist aber nicht serverseitig, dass GitHub diese Maschine tatsächlich als Self-hosted Runner mit den benötigten Labels registriert hat, einen Job an sie zustellen kann und der Job auf dem aktuellen `main` erfolgreich ausgeführt wurde.
 
-Zusätzlich konnte ein altes GREEN-Evidence-JSON liegen bleiben, wenn ein neuer Collector-Versuch vor dem abschließenden Überschreiben abbrach.
+Der bisherige Aktivierungspfad hing deshalb noch zu stark an einer lokalen `runner_readiness.json`. Das war technisch streng, aber betrieblich unnötig fragil: Admin-Terminal, Projektcheckout und GitHub-Runner-Workspace mussten praktisch eng gekoppelt bleiben.
 
 ### Verbesserungsvorschlag
 
-Runtime-GREEN als **laufgebundene Beweiskette** behandeln:
+Runner-Registrierung und Runner-Readiness als **serververmittelte Bootstrap-Acceptance** beweisen:
 
 ```text
-vor dem Lauf
-→ altes Runtime-JSON löschen
-→ alte Telemetrie löschen
-→ alten Automation-Report löschen
-→ Repository + HEAD + Maschine + sauberer Worktree prüfen
-→ zufällige run_id erzeugen
-
-UE-Lauf
-→ run_id als -CP1EvidenceRunId an Unreal übergeben
-→ C++-Automationstest verlangt run_id
-→ Unreal schreibt dieselbe run_id in Telemetrie v3
-
-Collector
-→ Telemetrie v3 fail-closed validieren
-→ Datei-SHA-256 bilden
-→ Repo + HEAD + Maschine + run_id + Telemetrie einbetten
-→ Runtime-Evidence Schema v3 versiegeln
-
-Gate
-→ aktuellen Repo-/HEAD-/Maschinenkontext erneut lesen
-→ aktuellen Worktree erneut prüfen
-→ echte Telemetrie-Datei neu lesen
-→ Datei-Hash + run_id + Inhalt + Schema + Freshness erneut prüfen
-→ nur dann CP1_GATE: GREEN
+GitHub workflow_dispatch auf main
+→ Job verlangt [self-hosted, unreal, ue-5.8]
+→ GitHub muss passenden Runner tatsächlich zuweisen
+→ Runner checkt exakt den Dispatch-SHA aus
+→ runner_readiness.py erzeugt Schema-v3-Evidence
+→ Bootstrap-Evidence bindet GitHub-Run + Runner + Checkout + Readiness
+→ Artifact wird auch bei Fehlern hochgeladen
+→ öffentlicher Verifier liest aktuellen main-SHA
+→ liest neuesten Bootstrap-Run auf genau diesem SHA
+→ liest dessen Job + runner_name + tatsächliche Job-Labels + Pflichtschritte
+→ nur bei frischem vollständigem Erfolg UE58_RUNNER_BOOTSTRAP: PASS
 ```
 
 ### Grund
 
-Ein Runtime-PASS ist der stärkste technische Status im aktuellen CP1. Deshalb darf er nicht aus einem alten JSON, einer kopierten Telemetrie oder einer nur formal plausiblen Testdatei entstehen. Die Evidence muss zeigen, dass **dieser konkrete Unreal-Lauf in diesem Checkout auf dieser Maschine genau diese Telemetrie erzeugt hat**.
+Ein registrierter Runner ist eine **GitHub-Infrastruktur-Eigenschaft**, keine rein lokale Eigenschaft. Der stärkere Beweis muss daher von GitHub selbst kommen: Ein Job, der ausdrücklich die Labels `self-hosted`, `unreal`, `ue-5.8` verlangt, kann nur erfolgreich werden, wenn GitHub einen passenden Runner tatsächlich findet, den Job zustellt und die Readiness-Schritte dort erfolgreich abschließt.
 
-Eine zufällige Lauf-ID ist hier entscheidend: Selbst ein gemeinsam kopiertes Evidence-/Telemetry-Paar vom gleichen Commit verliert seine Aussagekraft, wenn es nicht zur aktuellen Ausführungskette gehört. SHA-256 dient zusätzlich der Integrität der realen Telemetrie-Datei; er ist keine Signatur oder Hardware-Attestation.
+Das trennt außerdem Admin- und Runner-Arbeitsverzeichnis. Die spätere Aktivierung von `UE58_RUNNER_ENABLED=true` benötigt nicht mehr dieselbe lokale Readiness-Datei im Admin-Checkout, sondern einen frischen serverseitigen Bootstrap-PASS auf dem aktuellen `main`.
 
 ### Umgesetzt
 
-- `Scripts/cp1_runtime_evidence_contract.py` als zentrale fail-closed Runtime-/Telemetry-Vertragslogik ergänzt.
-- Runtime-Evidence auf Schema v3 / Typ `CP1_RUNTIME_EVIDENCE` angehoben.
-- Telemetrie auf `bunkerbeats.cp1.movement.telemetry.v3` angehoben.
-- C++-Automationstest verlangt `-CP1EvidenceRunId=<run-id>`.
-- Unreal schreibt die `run_id` selbst in `CP1_RuntimeTelemetry.json` zurück.
-- Collector erzeugt pro Versuch eine neue zufällige 32-stellige Hex-`run_id`.
-- alter Runtime-Report, alte Telemetrie und alter Automation-Report werden vor einem neuen Versuch entfernt.
-- Fehlschlag beim Stale-Cleanup blockiert den neuen Lauf.
-- Runtime-Collector bindet Evidence an Repository, vollständigen Git-HEAD und pseudonymen Maschinenfingerprint.
-- ein unsauberer Worktree blockiert bereits vor dem UE-Lauf.
-- UE `Build.version` wird über die bestehende Readiness-Logik exakt auf 5.8 geprüft.
-- Prozessstart-/Timeout-Fehler werden als strukturierte Step-Evidence gespeichert.
-- `runtime_executed` wird nur gesetzt, wenn der Unreal-Prozess tatsächlich gestartet wurde.
-- `cp1_pass` wird nur im vollständigen GREEN-Fall gesetzt.
-- Telemetrie-Datei wird zentral validiert und per SHA-256 gebunden.
-- eingebettete Telemetrie und echte Telemetrie-Datei müssen identisch sein.
-- Telemetrie prüft echte Zahlentypen, Vektoren, Frame-Werte, MovementComponent und Positions-/Displacement-Konsistenz.
-- `cp1_gate_runtime.py` liest aktuellen Repo-/HEAD-/Maschinenkontext und Worktree erneut.
-- Gate akzeptiert nur frische Runtime-Evidence (maximal 30 Minuten).
-- Gate prüft tatsächliche Telemetrie-Datei, Hash, `run_id`, Schema und Evidence-Integrität erneut.
-- `Scripts/run_cp1_ue58.py` ist jetzt die kanonische Sequenz Readiness → Preflight → Runtime → Gate.
-- GitHub-Workflow verwendet denselben Orchestrator und reagiert auch auf reine Contract-/Gate-Änderungen.
-- `Scripts/tests/test_cp1_runtime_evidence_contract.py` deckt stale/kopierte/manipulierte Evidence, Telemetrie-Drift, Typkanten und C++↔Python-Run-ID-Wiring ab.
+- `.github/workflows/ue58-runner-bootstrap.yml` als manueller Bootstrap-Acceptance-Workflow ergänzt.
+- Workflow besitzt ausschließlich `workflow_dispatch`; kein PR-, Push- oder Schedule-Trigger.
+- Job läuft ausschließlich auf `[self-hosted, unreal, ue-5.8]`.
+- Workflow besitzt nur `contents: read`.
+- kein UE-Build, kein CP1-Lauf und kein Schreiben von Repository-Variablen im Bootstrap-Workflow.
+- `Scripts/runner_bootstrap_evidence.py` erzeugt ein maschinenlesbares Bootstrap-Bundle.
+- Bundle bindet Repository, `main`-Ref, GitHub-SHA, Workflow, Job, Run-ID, Run-Attempt, Runnername, OS/Architektur, Maschinenfingerprint und Readiness-SHA-256.
+- `runtime_executed=false` und `cp1_pass=false` sind im Bootstrap-Beweis fest getrennt.
+- `Scripts/runner_bootstrap_contract.py` zentralisiert Labels, Workflow-/Jobnamen, Pflichtschritte und 30-Minuten-Freshness.
+- `Scripts/github_runner_bootstrap_public_verify.py` liest GitHub ohne Token live zurück.
+- nur der **neueste** passende Bootstrap-Lauf auf dem aktuellen `main` zählt; ein neuerer Fehllauf kann nicht durch einen älteren Erfolg verdeckt werden.
+- Public Verifier verlangt `workflow_dispatch`, aktuellen `main`-SHA, erfolgreichen Job, echten `runner_name`, alle Pflichtlabels und erfolgreiche Pflichtschritte.
+- `github_p0_admin.py --enable-runner-variable` akzeptiert lokale Readiness nicht mehr als alleinige Aktivierungsautorität.
+- Aktivierung verlangt jetzt frischen öffentlichen Bootstrap-PASS und einen sauberen Admin-Checkout exakt auf demselben aktuellen `main`-SHA.
+- Aktivierung ist nur noch zusammen mit `--apply-ruleset` erlaubt.
+- `p0_preflight.py --full` prüft den öffentlichen Bootstrap-Beweis zusätzlich zur lokalen Readiness.
+- separate Regressionstests decken stale/falsche Runs, fehlende Labels/Schritte, fehlenden Runnernamen, Public-Verify und den Variablen-Write-Guard ab.
 
 ### Erwartete Wirkung
 
-- kein CP1-GREEN aus einem liegen gebliebenen alten Evidence-JSON
-- kein CP1-GREEN aus kopierter Telemetrie eines anderen Laufs
-- kein CP1-GREEN nach Checkout-/HEAD-/Maschinenwechsel
-- Telemetrie-Datei und eingebettete Evidence können nicht unbemerkt auseinanderlaufen
-- manuelle Gate-Aufrufe sind genauso streng wie der Orchestrator
-- Collector, Gate und Tests verwenden denselben zentralen Vertrag
-- bessere Diagnose bei Timeout, Buildfehler, UE-Testfehler und Evidence-Drift
-- deutlich höhere Wartbarkeit durch eine kanonische Ausführungsreihenfolge
+- GitHub-Runner-Registrierung wird tatsächlich durch einen zugestellten Job bewiesen
+- keine Runner-Aktivierung nur aufgrund einer lokalen JSON-Datei
+- Admin-Terminal muss nicht mehr identisch mit dem Runner-Workspace sein
+- Runnername und Scheduler-Labels werden aus GitHub-Jobdaten beweisbar
+- alter Bootstrap eines früheren `main`-SHA wird automatisch ungültig
+- neuerer fehlgeschlagener Bootstrap kann nicht von älterem PASS überdeckt werden
+- deutlich bessere Diagnose zwischen „Runner fehlt“, „Runner nicht erreichbar“ und „Readiness auf Runner fehlgeschlagen“
+- CP1 bleibt weiterhin strikt von Bootstrap/Readiness getrennt
 
 ### Technischer Effekt
 
 ```text
-RUN-ID CHALLENGE
-Python run_id
-→ Unreal command line
-→ C++ Automation Test
-→ Telemetry v3 run_id
-→ telemetry SHA-256
-→ Runtime Evidence v3
-→ live Gate Revalidation
+REGISTERED RUNNER PROOF
+workflow_dispatch
+→ runs-on [self-hosted, unreal, ue-5.8]
+→ GitHub scheduler
+→ real runner_name
+→ Readiness v3
+→ bootstrap artifact
+→ public GitHub run/job re-read
+→ UE58_RUNNER_BOOTSTRAP: PASS
+
+ACTIVATION
+active P0 ruleset
++ fresh public bootstrap PASS
++ admin checkout == current main
++ clean worktree
+→ UE58_RUNNER_ENABLED=true
 ```
 
 ### Aktueller belegter Zustand
 
-- PR #6 Runner Evidence Binding: gemergt
-- `main` danach: `367efbd72d4918f6acb3c2a291e9493b507f7344`
-- Runtime Contract v3: implementiert
-- Telemetrie run_id v3: implementiert
-- Collector-Stale-Cleanup: implementiert
-- Live Runtime Gate: implementiert
-- Runtime-Contract-Regressionstests: implementiert
-- Hosted-Abnahme dieses neuen Branches: noch offen
+- PR #7 CP1 Runtime Evidence Contract v3: gemergt
+- `main` danach: `b6109c60d544a55091bcfcb8ef106eeeb5f012c8`
+- Bootstrap-Workflow: implementiert
+- Bootstrap-Evidence-Script: implementiert
+- öffentlicher Bootstrap-Verifier: implementiert
+- Aktivierungsgate auf Serverbeweis umgestellt: implementiert
+- Bootstrap-/Activation-Regressionstests: implementiert
 - reales GitHub-P0-Ruleset: weiterhin nicht aktiv nachgewiesen
 - realer Self-hosted UE-5.8-Runner: weiterhin nicht nachgewiesen
+- echter `UE58_RUNNER_BOOTSTRAP: PASS`: weiterhin offen
 - echter CP1 Runtime-Lauf: weiterhin `UNOBSERVED/BLOCKED`
 
 ### Fertig, wenn
 
 - Hosted `static-and-contract` PASS ist
-- Hosted `repository-quality` inklusive Runtime-Contract-Regressionen PASS ist
-- C++-/Python-Run-ID-Vertrag statisch konsistent ist
-- `cp1-runtime` ohne realen Runner weiterhin nur SKIPPED/BLOCKED bleibt
-- auf der echten UE-5.8-Maschine Build + Automation + Telemetrie v3 real erzeugt werden
-- das neue Live-Gate dieselbe Evidence anschließend als GREEN bestätigt
+- Hosted `repository-quality` inklusive Bootstrap-Regressionen PASS ist
+- Bootstrap-Workflow auf `main` manuell gestartet wird
+- GitHub einen Runner mit `self-hosted`, `unreal`, `ue-5.8` tatsächlich zuweist
+- Readiness v3 im Bootstrap-Job PASS ist
+- Artifact `runner_readiness.json` + `runner_bootstrap_evidence.json` erzeugt wird
+- `github_runner_bootstrap_public_verify.py` denselben Lauf serverseitig als `UE58_RUNNER_BOOTSTRAP: PASS` bestätigt
+- erst danach `UE58_RUNNER_ENABLED=true` freigegeben wird
 
 ### Detailanleitung
 
-Der reale Ablauf bleibt `RUN_CP1_UE58_ALL.sh` / `RUN_CP1_UE58_ALL.bat` beziehungsweise `python3 Scripts/run_cp1_ue58.py`. Ein Hosted-Test-PASS beweist nur die Vertragslogik, niemals den Unreal-Runtime-Erfolg.
+Siehe `Docs/GITHUB_P0_SETUP.md` und Issue #2. Ein Bootstrap-PASS beweist Runner-Registrierung und Readiness, aber ausdrücklich **keinen UE-Build und keinen CP1-Runtime-PASS**.
