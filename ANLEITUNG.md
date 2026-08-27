@@ -2,6 +2,8 @@
 
 > **Für Einsteiger:** Diese Anleitung führt vom heruntergeladenen Projekt bis zur ersten gültigen CP1-Prüfung. Du musst nicht wissen, wie Unreal Engine intern funktioniert.
 
+> **Dokumentrolle:** Diese Datei erklärt ausschließlich **wie** das Projekt gestartet, geprüft und bei typischen Problemen behandelt wird. Projektstatus steht in `README.md`, Prioritäten in `Docs/TODO.md`, Entwicklungsregeln in `AGENTS.md`.
+
 ---
 
 ## 1. Was ist das Ziel?
