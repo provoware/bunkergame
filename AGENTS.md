@@ -342,6 +342,15 @@ Neue Schemas brauchen:
 | Entwicklerprozess geändert | `AGENTS.md`, `CONTRIBUTING.md` |
 | Release-/Version geändert | Manifest, CHANGELOG, Status |
 
+### Zuständigkeit der vier Kerndokumente
+
+- `README.md` = **Was ist das Projekt und wo steht es?**
+- `ANLEITUNG.md` = **Wie starte, prüfe und repariere ich es als Einsteiger?**
+- `Docs/TODO.md` = **Was ist als Nächstes zu tun und warum?**
+- `AGENTS.md` = **Nach welchen Regeln darf entwickelt und bewertet werden?**
+
+Diese Verantwortungen nicht vermischen. Detailwissen gehört in `Docs/`, der schnelle Einstieg bleibt im Root.
+
 Ein Agent darf eine technische Änderung nicht als vollständig erklären, wenn die dadurch falsch gewordene Doku ungeändert bleibt.
 
 ---
