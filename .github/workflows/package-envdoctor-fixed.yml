@@ -1,0 +1,116 @@
+name: Package Environment Doctor Fixed Snapshot
+
+on:
+  push:
+    branches:
+      - artifact/package-envdoctor-fixed-d68bc67c
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-fixed-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout verified fixed main snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: d68bc67c7a4d7885662fd858eceb41169f6f4579
+          clean: true
+          fetch-depth: 1
+
+      - name: Verify fixed project
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 Scripts/repo_quality.py
+          python3 -m unittest Scripts.tests.test_environment_gui_contract -v
+          python3 Scripts/ci_verify.py
+
+      - name: Build clean complete ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_ROOT="BUNKER_BEATS_2026_FIXED_ENVDOCTOR_V2_main_d68bc67c"
+          OUT_DIR="$RUNNER_TEMP/package-output"
+          STAGE="$RUNNER_TEMP/$PACKAGE_ROOT"
+          rm -rf "$OUT_DIR" "$STAGE"
+          mkdir -p "$OUT_DIR" "$STAGE"
+
+          rm -rf Diagnostics Binaries DerivedDataCache Intermediate Saved .pytest_cache
+          find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find . -type f -name '*.pyc' -delete
+
+          rsync -a ./ "$STAGE/" \
+            --exclude '.git/' \
+            --exclude 'Binaries/' \
+            --exclude 'DerivedDataCache/' \
+            --exclude 'Diagnostics/' \
+            --exclude 'Intermediate/' \
+            --exclude 'Saved/' \
+            --exclude '__pycache__/' \
+            --exclude '.pytest_cache/' \
+            --exclude '*.pyc' \
+            --exclude '.DS_Store'
+
+          cat > "$STAGE/PAKET_INFO.txt" <<'EOF'
+          BUNKER BEATS 2026 — FIXED ENVIRONMENT DOCTOR v2
+          =================================================
+          Quelle: provoware/bunkergame
+          Branch: main
+          Commit: d68bc67c7a4d7885662fd858eceb41169f6f4579
+          Paketstatus: FIXED_ENVDOCTOR_V2_HOSTED_VERIFIED
+          Fix: Tkinter KeyError 'after' strukturell behoben.
+          Datenvertrag: Environment Summary Schema v2 mit before + after.
+          Vor Paketierung geprüft: repo_quality.py + test_environment_gui_contract.py + ci_verify.py
+          CP1 Runtime: weiterhin UNOBSERVED/BLOCKED; echter UE-5.8-Lauf erforderlich.
+          Erwartung ohne installierte UE 5.8: Environment Doctor bleibt YELLOW, darf aber nicht abstürzen.
+          EOF
+
+          export PACKAGE_ROOT OUT_DIR STAGE
+          python3 - <<'PY'
+          import os
+          import stat
+          import zipfile
+          from pathlib import Path
+
+          package_root = os.environ["PACKAGE_ROOT"]
+          stage = Path(os.environ["STAGE"])
+          out = Path(os.environ["OUT_DIR"]) / f"{package_root}.zip"
+
+          with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9, strict_timestamps=False) as archive:
+              for path in sorted(stage.rglob("*")):
+                  rel = path.relative_to(stage.parent)
+                  arcname = str(rel).replace(os.sep, "/")
+                  if path.is_dir():
+                      info = zipfile.ZipInfo(arcname + "/")
+                      info.create_system = 3
+                      info.external_attr = (stat.S_IFDIR | (path.stat().st_mode & 0o777)) << 16
+                      archive.writestr(info, b"")
+                      continue
+                  info = zipfile.ZipInfo.from_file(path, arcname=arcname)
+                  info.create_system = 3
+                  info.external_attr = (stat.S_IFREG | (path.stat().st_mode & 0o777)) << 16
+                  with path.open("rb") as source, archive.open(info, "w", force_zip64=True) as target:
+                      while True:
+                          chunk = source.read(1024 * 1024)
+                          if not chunk:
+                              break
+                          target.write(chunk)
+          PY
+
+          (cd "$OUT_DIR" && sha256sum "${PACKAGE_ROOT}.zip" > "${PACKAGE_ROOT}.zip.sha256")
+          echo "PACKAGE_FILE=$OUT_DIR/${PACKAGE_ROOT}.zip" >> "$GITHUB_ENV"
+          echo "PACKAGE_SHA=$OUT_DIR/${PACKAGE_ROOT}.zip.sha256" >> "$GITHUB_ENV"
+
+      - name: Upload complete project package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: BUNKER_BEATS_2026_FIXED_ENVDOCTOR_V2_main_d68bc67c
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ env.PACKAGE_FILE }}
+            ${{ env.PACKAGE_SHA }}
