@@ -14,7 +14,6 @@ import re
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 from github_p0_ruleset import (
@@ -26,10 +25,17 @@ from github_p0_ruleset import (
     find_named_ruleset,
     ruleset_payload,
 )
+from runner_identity import (
+    EXPECTED_REPOSITORY,
+    current_git_head,
+    current_repository_identity,
+    git_worktree_clean,
+    machine_fingerprint,
+)
+from runner_readiness_contract import validate_readiness_report
 
 ROOT = Path(__file__).resolve().parents[1]
 READINESS_REPORT = ROOT / "Diagnostics" / "Runtime" / "runner_readiness.json"
-MAX_READINESS_AGE_SECONDS = 30 * 60
 HTTP_STATUS_RE = re.compile(r"(?:HTTP\s*)?(403|404|422)\b", re.IGNORECASE)
 
 
@@ -377,14 +383,6 @@ def verify() -> bool:
     return ok
 
 
-def parse_utc(value: str) -> datetime:
-    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
-    parsed = datetime.fromisoformat(normalized)
-    if parsed.tzinfo is None:
-        raise ValueError("timestamp has no timezone")
-    return parsed.astimezone(timezone.utc)
-
-
 def validate_fresh_readiness(report_path: Path = READINESS_REPORT) -> tuple[bool, str]:
     if not report_path.is_file():
         return False, f"Readiness-Evidence fehlt: {report_path}"
@@ -393,36 +391,32 @@ def validate_fresh_readiness(report_path: Path = READINESS_REPORT) -> tuple[bool
     except (OSError, json.JSONDecodeError) as exc:
         return False, f"Readiness-Evidence ist ungültig: {exc}"
 
-    if data.get("schema_version") != 2:
-        return False, f"unerwartete Readiness-Schema-Version: {data.get('schema_version')}"
-    if data.get("kind") != "UE58_RUNNER_READINESS":
-        return False, "falscher Evidence-Typ"
-    if data.get("status") != "PASS":
-        return False, f"Readiness-Status ist {data.get('status')!r}, nicht PASS"
-    if data.get("runtime_executed") is not False or data.get("cp1_pass") is not False:
-        return False, "Readiness-Evidence vermischt unzulässig Runtime-/CP1-Status"
+    repository, repository_detail = current_repository_identity(ROOT)
+    if repository != EXPECTED_REPOSITORY:
+        return False, f"aktueller Checkout ist nicht {EXPECTED_REPOSITORY}: {repository_detail}"
 
-    checks = data.get("checks")
-    if not isinstance(checks, dict) or not checks or not all(value is True for value in checks.values()):
-        return False, "nicht alle Readiness-Checks sind PASS"
-    if checks.get("engine_version_exact_5_8") is not True:
-        return False, "UE-Version ist nicht exakt 5.8 bestätigt"
+    head, head_detail = current_git_head(ROOT)
+    if head is None:
+        return False, f"aktueller Git-HEAD ist nicht bindbar: {head_detail}"
 
-    stamp = data.get("generated_at_utc")
-    if not isinstance(stamp, str):
-        return False, "Freshness-Zeitstempel fehlt"
-    try:
-        generated = parse_utc(stamp)
-    except (ValueError, TypeError) as exc:
-        return False, f"Freshness-Zeitstempel ungültig: {exc}"
+    fingerprint, fingerprint_detail = machine_fingerprint()
+    if fingerprint is None:
+        return False, f"aktuelle Maschine ist nicht bindbar: {fingerprint_detail}"
 
-    age = (datetime.now(timezone.utc) - generated).total_seconds()
-    if age < -300:
-        return False, "Readiness-Evidence liegt unplausibel in der Zukunft"
-    if age > MAX_READINESS_AGE_SECONDS:
-        return False, f"Readiness-Evidence ist zu alt ({int(age)} s > {MAX_READINESS_AGE_SECONDS} s)"
+    clean, clean_detail = git_worktree_clean(ROOT)
+    if not clean:
+        return False, f"aktueller Git-Arbeitsstand ist nicht sauber: {clean_detail}"
 
-    return True, f"frische Readiness-Evidence bestätigt ({int(max(age, 0))} s alt)"
+    ok, detail = validate_readiness_report(
+        data,
+        expected_repository=repository,
+        expected_head=head,
+        expected_machine_fingerprint=fingerprint,
+    )
+    if not ok:
+        return False, detail
+
+    return True, detail + "; aktueller Worktree erneut sauber bestätigt"
 
 
 def set_runner_variable() -> None:
@@ -430,7 +424,7 @@ def set_runner_variable() -> None:
     if not ready:
         raise RuntimeError(
             "UE58_RUNNER_ENABLED bleibt gesperrt. " + detail +
-            "\nZuerst auf der echten UE-Maschine `python3 Scripts/runner_readiness.py` erfolgreich ausführen."
+            "\nZuerst auf derselben UE-Maschine und demselben sauberen Checkout `python3 Scripts/runner_readiness.py` erfolgreich ausführen."
         )
     print(f"[PASS] {detail}")
     result = run(
@@ -451,7 +445,7 @@ def main() -> int:
     parser.add_argument(
         "--enable-runner-variable",
         action="store_true",
-        help="UE58_RUNNER_ENABLED=true setzen; verlangt frische RUNNER_READINESS: PASS Evidence",
+        help="UE58_RUNNER_ENABLED=true setzen; verlangt frische, checkout- und maschinengebundene RUNNER_READINESS: PASS Evidence",
     )
     args = parser.parse_args()
 

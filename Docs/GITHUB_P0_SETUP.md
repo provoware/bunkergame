@@ -15,9 +15,13 @@ aktives Repository Ruleset für main
    ↓
 öffentlicher Ruleset-Live-Beweis PASS
    ↓
+GitHub-Infrastruktur-Evidence PASS
+   ↓
 Self-hosted UE-5.8 Runner
    ↓
-Runner Readiness PASS
+Runner Readiness Schema v3 PASS
+   ↓
+gleicher Checkout + gleiche Maschine + sauberer Worktree erneut bestätigt
    ↓
 UE58_RUNNER_ENABLED=true
    ↓
@@ -201,6 +205,23 @@ Folgende Zustände bleiben INCOMPLETE:
 
 Damit kann eine lokale Testfixture keinen Live-PASS vortäuschen.
 
+### Maschinenlesbares Infrastruktur-Bundle
+
+Für archivierte Evidence zusätzlich:
+
+```bash
+python3 Scripts/github_p0_evidence.py
+python3 Scripts/github_p0_evidence_validate.py
+```
+
+Der zweite Befehl akzeptiert den gespeicherten PASS niemals allein, sondern liest GitHub erneut und verlangt denselben aktuellen `main`-SHA sowie denselben vollständigen Ruleset-Vertrag.
+
+Detailanleitung:
+
+```text
+Docs/P0_INFRASTRUCTURE_EVIDENCE.md
+```
+
 ---
 
 ## 6. AUTOMATISCHER EXTERNER INFRASTRUKTUR-OBSERVER
@@ -225,6 +246,8 @@ Jobname:
 ```text
 p0-infrastructure-evidence
 ```
+
+Der Observer sammelt ein JSON-Bundle, revalidiert es live und lädt es auch bei FAIL als Artifact hoch. Erst danach wird der Jobstatus erzwungen.
 
 Bis das echte Ruleset aktiv ist, darf dieser Observer rot sein. Das ist kein Fehler der Testlogik, sondern wahrheitsgemäße Infrastruktur-Evidence.
 
@@ -283,9 +306,9 @@ Registrierungstoken niemals in Git, Issues, Markdown, Screenshots oder Logs spei
 
 ---
 
-## 9. RUNNER-READINESS
+## 9. RUNNER-READINESS — SCHEMA v3
 
-Auf der echten UE-Maschine:
+Auf der echten UE-Maschine und im **sauberen Projektcheckout**:
 
 ```bash
 python3 Scripts/p0_preflight.py --full
@@ -304,6 +327,9 @@ Die Readiness prüft unter anderem:
 - Schreibrechte
 - mindestens 5 GB frei
 - sauberer Git-Arbeitsstand
+- Git-Remote gehört exakt zu `provoware/bunkergame`
+- vollständiger aktueller Git-HEAD ist bestimmbar
+- pseudonymer Maschinenfingerprint ist bestimmbar
 
 Evidence:
 
@@ -311,25 +337,63 @@ Evidence:
 Diagnostics/Runtime/runner_readiness.json
 ```
 
+Schema v3 bindet die Evidence an:
+
+```text
+repository
++ git_head_sha
++ machine_fingerprint_sha256
++ machine_identity_scheme
++ exakt definierter vollständiger Check-Satz
+```
+
+Der Maschinenfingerprint ist ein SHA-256 aus Hostname, Betriebssystem und Architektur. Er ist **keine Hardware-Attestation** und speichert keine Hardware-Seriennummer. Sein Zweck ist Kontextbindung und Vermeidung einfacher Evidence-Verwechslung zwischen Maschinen.
+
+Der Pflichtcheck-Satz wird zentral in `Scripts/runner_readiness_contract.py` definiert. Fehlende oder zusätzliche Checks blockieren die Freigabe.
+
 Nur frische PASS-Evidence, maximal 30 Minuten alt, darf die Runner-Freigabe ermöglichen.
 
-`RUNNER_READINESS: PASS` beweist nur Maschinenbereitschaft.
+`RUNNER_READINESS: PASS` beweist nur Maschinenbereitschaft. Es ist ausdrücklich noch kein UE-Build-/CP1-PASS.
 
 ---
 
-## 10. RUNNER-VARIABLE FREIGEBEN
+## 10. RUNNER-VARIABLE FREIGEBEN — KONTEXT ERNEUT PRÜFEN
 
-Bevorzugt auf derselben UE-Maschine und direkt nach frischer Readiness:
+Bevorzugt auf **derselben UE-Maschine, demselben Checkout und direkt nach frischer Readiness**:
 
 ```bash
 python3 Scripts/github_p0_admin.py --apply-ruleset --enable-runner-variable
 ```
 
-Das Ruleset wird idempotent erneut geprüft/aktualisiert; anschließend wird die lokale Readiness-Evidence nochmals validiert. Nur dann wird gesetzt:
+Das Ruleset wird idempotent erneut geprüft/aktualisiert. Danach wird die lokale Readiness-Evidence nicht nur gelesen, sondern gegen den **jetzt aktuellen Kontext** geprüft:
+
+```text
+Repository jetzt
+→ muss weiterhin provoware/bunkergame sein
+
+Git-HEAD jetzt
+→ muss exakt Evidence-HEAD sein
+
+Maschinenfingerprint jetzt
+→ muss exakt Evidence-Fingerprint sein
+
+Worktree jetzt
+→ muss erneut sauber sein
+
+Evidence
+→ Schema v3
+→ vollständiger Check-Satz
+→ UE exakt 5.8
+→ maximal 30 Minuten alt
+```
+
+Erst danach wird gesetzt:
 
 ```text
 UE58_RUNNER_ENABLED=true
 ```
+
+Damit blockieren auch uncommittete Änderungen nach dem Readiness-Lauf die Freigabe, obwohl sich der Git-HEAD dabei nicht geändert hätte.
 
 ---
 
@@ -344,7 +408,7 @@ CP1 UE 5.8 Runtime
 Beweiskette:
 
 ```text
-Runner Readiness
+Runner Readiness v3
 → Repository Preflight
 → UE 5.8 Build
 → Character Spawn
@@ -375,12 +439,19 @@ Erst dieser Lauf darf CP1 GREEN machen.
 - [ ] Force-Push gesperrt
 - [ ] Löschen von `main` gesperrt
 - [ ] `GITHUB_P0_PUBLIC_RULESET: PASS`
+- [ ] `GITHUB_P0_EVIDENCE: PASS`
 - [ ] Hosted `P0 Infrastructure Observer` PASS
 - [ ] Self-hosted Runner registriert
 - [ ] Labels `unreal`, `ue-5.8` vorhanden
 - [ ] Runner online/idle
+- [ ] Readiness-Schema v3 erzeugt
+- [ ] Repository-Bindung korrekt
+- [ ] Git-HEAD-Bindung korrekt
+- [ ] Maschinenfingerprint vorhanden
+- [ ] exakt vollständiger Pflichtcheck-Satz PASS
 - [ ] `RUNNER_READINESS: PASS`
 - [ ] Readiness-Evidence höchstens 30 Minuten alt
+- [ ] Worktree unmittelbar vor Enable erneut sauber
 - [ ] `UE58_RUNNER_ENABLED=true` erst danach
 - [ ] echter CP1-Lauf ausgeführt
 - [ ] Runtime-Evidence geprüft

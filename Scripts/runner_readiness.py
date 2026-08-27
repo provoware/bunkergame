@@ -2,6 +2,8 @@
 """Self-hosted UE 5.8 runner readiness check.
 
 This proves machine readiness only. It never upgrades CP1 runtime status to PASS.
+Readiness evidence is bound to the current repository, exact Git HEAD and a
+pseudonymous machine fingerprint so it cannot be casually reused elsewhere.
 """
 
 from __future__ import annotations
@@ -10,15 +12,28 @@ import json
 import os
 import platform
 import shutil
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from runner_identity import (
+    EXPECTED_REPOSITORY,
+    MACHINE_IDENTITY_SCHEME,
+    current_git_head,
+    current_repository_identity,
+    git_worktree_clean,
+    machine_fingerprint,
+)
+from runner_readiness_contract import (
+    EXPECTED_UE_MAJOR,
+    EXPECTED_UE_MINOR,
+    KIND,
+    REQUIRED_CHECKS,
+    SCHEMA_VERSION,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "Diagnostics" / "Runtime" / "runner_readiness.json"
-EXPECTED_UE_MAJOR = 5
-EXPECTED_UE_MINOR = 8
 
 
 def command_exists(*names: str) -> str | None:
@@ -110,24 +125,13 @@ def read_engine_version(root: Path | None) -> tuple[bool, dict | None, str]:
         return False, None, f"invalid Build.version: {exc}"
     major = data.get("MajorVersion")
     minor = data.get("MinorVersion")
-    ok = major == EXPECTED_UE_MAJOR and minor == EXPECTED_UE_MINOR
+    ok = (
+        type(major) is int
+        and type(minor) is int
+        and major == EXPECTED_UE_MAJOR
+        and minor == EXPECTED_UE_MINOR
+    )
     return ok, data, f"{major}.{minor}"
-
-
-def git_clean() -> tuple[bool, str]:
-    try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=ROOT,
-            check=True,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-    except Exception as exc:
-        return False, f"git status unavailable: {exc}"
-    dirty = [line for line in result.stdout.splitlines() if line.strip()]
-    return not dirty, "clean" if not dirty else f"{len(dirty)} changed/untracked path(s)"
 
 
 def main() -> int:
@@ -135,7 +139,11 @@ def main() -> int:
     version_ok, version_data, version_detail = read_engine_version(engine_root)
     disk = shutil.disk_usage(ROOT)
     free_gb = disk.free / (1024**3)
-    clean, clean_detail = git_clean()
+
+    clean, clean_detail = git_worktree_clean(ROOT)
+    repository, repository_detail = current_repository_identity(ROOT)
+    git_head, git_head_detail = current_git_head(ROOT)
+    fingerprint, fingerprint_detail = machine_fingerprint()
 
     compiler = command_exists("clang++", "g++", "cl.exe", "cl")
     python_cmd = command_exists("python3", "python")
@@ -151,17 +159,25 @@ def main() -> int:
         "repo_writable": os.access(ROOT, os.W_OK),
         "free_disk_gt_5gb": free_gb >= 5.0,
         "git_worktree_clean_before_runtime": clean,
+        "repository_identity_exact": repository == EXPECTED_REPOSITORY,
+        "git_head_bound": git_head is not None,
+        "machine_identity_bound": fingerprint is not None,
     }
 
-    required_pass = all(checks.values())
+    contract_shape_ok = set(checks) == REQUIRED_CHECKS
+    required_pass = contract_shape_ok and all(value is True for value in checks.values())
     now = datetime.now(timezone.utc)
     report = {
-        "schema_version": 2,
-        "kind": "UE58_RUNNER_READINESS",
+        "schema_version": SCHEMA_VERSION,
+        "kind": KIND,
         "generated_at_utc": now.isoformat().replace("+00:00", "Z"),
         "runtime_executed": False,
         "cp1_pass": False,
         "status": "PASS" if required_pass else "FAIL",
+        "repository": repository,
+        "git_head_sha": git_head,
+        "machine_fingerprint_sha256": fingerprint,
+        "machine_identity_scheme": MACHINE_IDENTITY_SCHEME,
         "platform": platform.platform(),
         "python": sys.version.split()[0],
         "engine_root": str(engine_root) if engine_root else None,
@@ -172,6 +188,11 @@ def main() -> int:
         "compiler_hint": compiler,
         "free_disk_gb": round(free_gb, 2),
         "git_worktree": clean_detail,
+        "identity_diagnostics": {
+            "repository": repository_detail,
+            "git_head": git_head_detail,
+            "machine": fingerprint_detail,
+        },
         "checks": checks,
         "note": "Readiness PASS proves machine prerequisites only; it is not CP1 runtime evidence.",
     }
@@ -180,6 +201,8 @@ def main() -> int:
     REPORT.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2, ensure_ascii=False))
 
+    if not contract_shape_ok:
+        print("[FAIL] Internal readiness check set does not match the central contract.")
     if not compiler:
         print("[WARN] No compiler executable found on PATH. Unreal may still locate its toolchain independently.")
 

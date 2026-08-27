@@ -478,3 +478,65 @@ Der `P0 Infrastructure Observer` lädt das Bundle mit gepinntem `actions/upload-
 **Reproduzierbarkeit:** sehr hoch  
 **Codequalität:** hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-009 — Sicherheits-Evidence gegen Kontext-Reuse absichern
+
+**Iteration:** Runner Evidence Binding  
+**Kategorie:** Evidence Integrity / Runner Security / Fail-Closed Validation  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT — reale UE-5.8-Maschinen-Evidence weiterhin offen  
+**Aufwand:** 4/10  
+**Risiko:** 2/10
+
+### Verbesserungsvorschlag
+
+Readiness-Evidence nicht nur auf Freshness und einzelne positive Checks prüfen, sondern sie an den **konkreten Ausführungskontext** binden und diesen Kontext unmittelbar vor dem sicherheitsrelevanten Zustandsübergang erneut bestimmen.
+
+### Grund
+
+Eine noch frische Readiness-Datei kann ihre Aussagekraft verlieren, wenn sie aus einem anderen Checkout oder von einer anderen Maschine stammt. Zusätzlich reicht ein Git-HEAD allein nicht aus: Uncommittete Änderungen können den Arbeitsstand verändern, ohne den SHA zu ändern. Ein offener Check-Satz birgt außerdem das Risiko, dass eine verkürzte Evidence nur die gerade vorhandenen `true`-Werte enthält und trotzdem akzeptiert wird.
+
+### Wirkung
+
+- kopierte Evidence aus anderem Checkout wird blockiert
+- Evidence von einer anderen Maschine wird blockiert
+- geänderter Git-HEAD wird blockiert
+- nach Readiness verschmutzter Worktree wird blockiert
+- fehlende Pflichtchecks werden blockiert
+- unbekannte Zusatzchecks werden blockiert
+- alte Schema-v2-Evidence wird bewusst nicht mehr zur Runner-Freigabe akzeptiert
+- Collector und Admin-Gate verwenden denselben zentralen Readiness-Vertrag
+- weniger Drift zwischen Erzeugung und Verbrauch der Evidence
+
+### Technischer Effekt
+
+Neu sind `Scripts/runner_identity.py` und `Scripts/runner_readiness_contract.py`. Das Readiness-Schema v3 enthält Repository, vollständigen Git-HEAD und einen pseudonymen Maschinenfingerprint. Der Pflichtcheck-Satz ist exakt definiert.
+
+Vor `UE58_RUNNER_ENABLED=true` liest `github_p0_admin.py` den aktuellen Kontext erneut:
+
+```text
+origin → erwartetes Repository
+HEAD → exakt Evidence-HEAD
+Maschinenfingerprint → exakt Evidence-Fingerprint
+Worktree → weiterhin sauber
+Schema v3 → vollständig
+Freshness → ≤ 30 Minuten
+UE Build.version → exakt 5.8
+```
+
+Erst danach kann die Repository-Variable gesetzt werden.
+
+Der Maschinenfingerprint ist ein SHA-256 aus Hostname, Betriebssystem und Architektur. Er ist bewusst **keine Hardware-Attestation** und kein Identitätsnachweis; er reduziert Kontext-Reuse und versehentliche Evidence-Verwechslung, ohne Hardware-Seriennummern zu speichern.
+
+Die separate Testdatei `Scripts/tests/test_runner_evidence_binding.py` prüft Repository-Normalisierung, HEAD-/Maschinen-Reuse, exakten Check-Satz, Bool-/Integer-Kanten, Freshness, Worktree-Drift und die reale Admin-Validator-Verknüpfung.
+
+### Erwarteter Nutzen
+
+**Evidence-Integrität:** sehr hoch  
+**Runner-Sicherheit:** sehr hoch  
+**Fehlbedienungsschutz:** sehr hoch  
+**Codequalität:** sehr hoch  
+**Wartbarkeit:** hoch  
+**Gameplay-Risiko:** keines
