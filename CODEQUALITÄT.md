@@ -59,3 +59,68 @@ Der zugehörige `Iteration Guard` prüft zusätzlich, dass bei jeder PR-Iteratio
 **Wartbarkeit:** sehr hoch  
 **Entwicklerführung:** sehr hoch  
 **Gameplay-Risiko:** keines
+
+---
+
+## CQ-2026-08-27-002 — Adminänderungen als Dry-Run + Read-back-Verifikation
+
+**Iteration:** GitHub P0 Hardening  
+**Kategorie:** GitHub-Administration / Safety by Design / Reproduzierbarkeit  
+**Priorität:** P0  
+**Status:** 🟢 IMPLEMENTIERT, externe Ausführung noch offen  
+**Aufwand:** 3/10  
+**Risiko:** 2/10
+
+### Verbesserungsvorschlag
+
+Weitreichende GitHub-Adminänderungen nicht als unkontrollierte Einmalbefehle dokumentieren, sondern als sicheren Assistenten mit drei Stufen ausführen:
+
+```text
+Dry-Run
+→ explizites Apply
+→ serverseitiges Read-back
+```
+
+Dafür wurden `Scripts/github_p0_admin.py` und `Scripts/github_p0_status.py` eingeführt.
+
+### Grund
+
+Branch-Protection ist sicherheitsrelevant. Ein falsch gesetzter Check-Name kann entweder Schutzwirkung verlieren oder das Repository dauerhaft blockieren. Besonders kritisch wäre es, `cp1-runtime` global als Pflichtprüfung zu setzen, solange der Self-hosted UE-Runner nicht dauerhaft verfügbar ist.
+
+### Wirkung
+
+- Adminänderungen werden vor dem Schreiben sichtbar.
+- Schreiboperationen benötigen eine explizite Benutzerentscheidung.
+- GitHub wird nach der Änderung erneut abgefragt.
+- Required Checks werden auf die tatsächlich stabilen Kontexte begrenzt.
+- Branch-Schutz und UE-Runner-Freigabe bleiben getrennte Gates.
+- die Konfiguration wird reproduzierbar statt nur als Klickfolge dokumentiert.
+
+### Technischer Effekt
+
+`github_p0_admin.py` setzt erst mit `--apply`:
+
+- PR-Gate für `main`
+- `static-and-contract` als Required Check
+- `repository-quality` als Required Check
+- `strict=true` für aktuellen Branch vor Merge
+- Schutz auch für Admins
+- Force-Push aus
+- Branch-Löschen aus
+- offene Review-Diskussionen als Merge-Blocker
+
+Anschließend liest das Skript die Branch-Protection erneut und meldet `GITHUB_P0_BRANCH_GATE: PASS` nur, wenn die zentralen Sollwerte wirklich serverseitig sichtbar sind.
+
+`github_p0_status.py` ist vollständig read-only und prüft zusätzlich, ob ein passender Self-hosted Runner sichtbar ist und ob `UE58_RUNNER_ENABLED` gesetzt wurde.
+
+### Grund für die Trennung der Runner-Variable
+
+`UE58_RUNNER_ENABLED=true` darf erst nach einem echten `RUNNER_READINESS: PASS` aktiviert werden. Dadurch kann eine bloße Runner-Registrierung nicht versehentlich den CP1-Workflow freischalten, bevor UE 5.8, Toolchain, Speicher und Schreibrechte real geprüft wurden.
+
+### Erwarteter Nutzen
+
+**Robustheit:** sehr hoch  
+**Fehlkonfigurationsschutz:** sehr hoch  
+**Nachvollziehbarkeit:** sehr hoch  
+**Rollback-Fähigkeit:** hoch  
+**Gameplay-Risiko:** keines
