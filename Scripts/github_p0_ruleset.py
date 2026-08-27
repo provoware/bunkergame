@@ -119,10 +119,15 @@ def evaluate_ruleset(data: object) -> tuple[bool, list[str]]:
         failures.append("doppelte Ruleset-Regeln: " + ", ".join(duplicates))
 
     actual_types = set(rule_types)
-    missing_types = sorted(EXPECTED_RULE_TYPES - actual_types)
+    missing_types = EXPECTED_RULE_TYPES - actual_types
     extra_types = sorted(actual_types - EXPECTED_RULE_TYPES)
-    if missing_types:
-        failures.append("Pflichtregeln fehlen: " + ", ".join(missing_types))
+    if "deletion" in missing_types:
+        failures.append("Branch-Löschen ist nicht gesperrt")
+    if "non_fast_forward" in missing_types:
+        failures.append("Force-Push ist nicht gesperrt")
+    other_missing = sorted(missing_types - {"deletion", "non_fast_forward"})
+    if other_missing:
+        failures.append("Pflichtregeln fehlen: " + ", ".join(other_missing))
     if extra_types:
         failures.append("unerwartete Zusatzregeln: " + ", ".join(extra_types))
 
