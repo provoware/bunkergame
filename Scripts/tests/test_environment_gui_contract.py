@@ -15,6 +15,22 @@ from environment_contract import (
     normalize_result_payload,
     serialize_findings,
 )
+from viewport_layout import COMPACT_LAYOUT_BELOW, MIN_WINDOW_SIZE, is_compact_layout
+
+
+class EnvironmentViewportLayoutTests(unittest.TestCase):
+    def test_minimum_window_is_800_by_600(self):
+        self.assertEqual(MIN_WINDOW_SIZE, (800, 600))
+
+    def test_small_and_intermediate_widths_stack_panes(self):
+        for width in (800, 960, 1024, COMPACT_LAYOUT_BELOW - 1):
+            with self.subTest(width=width):
+                self.assertTrue(is_compact_layout(width))
+
+    def test_wide_widths_show_panes_side_by_side(self):
+        for width in (COMPACT_LAYOUT_BELOW, 1180, 1600):
+            with self.subTest(width=width):
+                self.assertFalse(is_compact_layout(width))
 
 
 class EnvironmentPayloadContractTests(unittest.TestCase):

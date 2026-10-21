@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-10-21 — CP1-Diagnose für kleine Fenster
+
+### Changed
+- Environment Doctor lässt sich auf 800 × 600 Pixel einstellen.
+- Ampel- und Detailbereiche werden unter 1120 Pixeln gestapelt, auf breiten Fenstern nebeneinander angezeigt.
+- Die Erklärungsspalte wächst bei ausreichend Platz flexibel; vorhandene Diagnose- und Reparaturlogik bleibt unverändert.
+
+### Tests und Status
+- Neue reine Grenzwerttests für die Layoutentscheidung bei 800 bis 1600 Pixeln.
+- Echte Tkinter-Darstellung bei 800 × 600 und hoher Skalierung bleibt noch zu prüfen.
+- CP1 Runtime weiterhin UNOBSERVED/BLOCKED; keine Unreal- oder Savegame-Änderung.
+
 ## 2026-08-27 — UE 5.8 Runner Bootstrap Acceptance
 
 ### Added

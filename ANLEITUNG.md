@@ -34,6 +34,12 @@ CP1 bewerten
 
 ---
 
+### Kleiner Bildschirm (800 × 600)
+
+Das Fenster **Environment Doctor** ist auf eine Mindestgröße von **800 × 600 Pixeln** eingestellt. Unter 1120 Pixel Fensterbreite stehen die Bereiche **Anforderungen / Ampel** und **Detailereignisse** untereinander, damit Erklärungen nicht durch schmale Spalten verdeckt werden. Ab 1120 Pixeln erscheinen sie nebeneinander.
+
+Die Knöpfe **Prüfen** und **Sicher reparieren** bleiben oben. Die technische Prüfung und der echte Unreal-Lauf werden durch die Fenstergröße nicht verändert. Die tatsächliche Darstellung bei hoher Linux-Bildschirmskalierung muss noch visuell abgenommen werden.
+
 ## 2. Ampelsystem
 
 | Ampel | Bedeutung | Was tun? |

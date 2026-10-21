@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "Launcher/core"))
 
 from assistant import EnvironmentAssistant
 from environment_contract import normalize_result_payload
+from viewport_layout import MIN_WINDOW_SIZE, is_compact_layout
 
 
 class App(tk.Tk):
@@ -18,10 +19,13 @@ class App(tk.Tk):
         super().__init__()
         self.title("BUNKER BEATS — Environment Doctor")
         self.geometry("1180x760")
-        self.minsize(960, 650)
+        self.minsize(*MIN_WINDOW_SIZE)
         self.q = queue.Queue()
         self.running = False
+        self._compact_layout = None
         self.build()
+        self.bind('<Configure>', self._on_resize)
+        self.after_idle(self._update_layout)
         self.after(100, self.poll)
         self.run(False)
 
@@ -45,26 +49,27 @@ class App(tk.Tk):
         )
         self.repair_button.pack(side="left", padx=4)
 
-        pan = ttk.PanedWindow(self, orient="horizontal")
-        pan.pack(fill="both", expand=True, padx=14, pady=8)
-        left = ttk.Frame(pan, padding=8)
-        right = ttk.Frame(pan, padding=8)
-        pan.add(left, weight=1)
-        pan.add(right, weight=2)
+        self.panes = ttk.Frame(self)
+        self.panes.pack(fill="both", expand=True, padx=14, pady=8)
+        self.left_pane = ttk.Frame(self.panes, padding=8)
+        self.right_pane = ttk.Frame(self.panes, padding=8)
+        left = self.left_pane
+        right = self.right_pane
 
         ttk.Label(left, text="Anforderungen / Ampel", font=("TkDefaultFont", 12, "bold")).pack(anchor="w")
         self.tree = ttk.Treeview(
             left,
             columns=("status", "area", "message"),
             show="headings",
+            height=6,
         )
         for col, title, width in [
-            ("status", "Status", 90),
-            ("area", "Bereich", 150),
-            ("message", "Einfache Erklärung", 430),
+            ("status", "Status", 70),
+            ("area", "Bereich", 100),
+            ("message", "Einfache Erklärung", 230),
         ]:
             self.tree.heading(col, text=title)
-            self.tree.column(col, width=width)
+            self.tree.column(col, width=width, minwidth=60, stretch=col == "message")
         self.tree.pack(fill="both", expand=True)
 
         ttk.Label(
@@ -72,7 +77,7 @@ class App(tk.Tk):
             text="Detailereignisse / Debugging",
             font=("TkDefaultFont", 12, "bold"),
         ).pack(anchor="w")
-        self.output = tk.Text(right, wrap="word", state="disabled")
+        self.output = tk.Text(right, wrap="word", state="disabled", height=8)
         self.output.pack(fill="both", expand=True)
         self.status = tk.StringVar(value="Prüfung läuft …")
         ttk.Label(
@@ -80,6 +85,30 @@ class App(tk.Tk):
             textvariable=self.status,
             font=("TkDefaultFont", 13, "bold"),
         ).pack(anchor="w", pady=6)
+
+    def _on_resize(self, event):
+        if event.widget is self:
+            self._update_layout(event.width)
+
+    def _update_layout(self, width: int | None = None):
+        compact = is_compact_layout(width if width is not None else self.winfo_width())
+        if compact == self._compact_layout:
+            return
+        self._compact_layout = compact
+        self.left_pane.grid_forget()
+        self.right_pane.grid_forget()
+        self.panes.columnconfigure(0, weight=1 if compact else 2)
+        self.panes.columnconfigure(1, weight=0 if compact else 3)
+        self.panes.rowconfigure(0, weight=1)
+        self.panes.rowconfigure(1, weight=1 if compact else 0)
+        self.left_pane.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
+        self.right_pane.grid(
+            row=1 if compact else 0,
+            column=0 if compact else 1,
+            sticky="nsew",
+            padx=4,
+            pady=4,
+        )
 
     def _set_busy(self, busy: bool, text: str | None = None):
         self.running = busy

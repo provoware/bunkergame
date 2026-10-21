@@ -781,3 +781,28 @@ Der Release-Smoke nach dem Environment-Doctor-Fix zeigte, dass `START_BUNKER_BEA
 **Regressionserkennung:** hoch  
 **Gameplay-Risiko:** keines
 
+
+## CQ-2026-10-21-014 — CP1-Diagnosefenster bei 800 × 600 adaptiv anordnen
+
+**Iteration:** CP1 Environment Doctor Small-Screen Layout  
+**Kategorie:** Oberfläche / Zugänglichkeit / CP1-Vorprüfung  
+**Priorität:** P0 (Diagnosezugang)  
+**Status:** 🟡 IMPLEMENTIERT, echte GUI-Abnahme ausstehend  
+**Aufwand:** 3/10  
+**Risiko:** 2/10
+
+### Verbesserungsvorschlag
+
+Den bisher auf mindestens 960 × 650 fixierten Diagnose-Dialog auf 800 × 600 verkleinern können und die Ampel- und Detailbereiche unterhalb von 1120 Pixel Fensterbreite vertikal statt horizontal anordnen.
+
+### Grund
+
+Bei kleinen Bildschirmen schneidet eine starre zweispaltige Darstellung mit 670 Pixel breiter Tabelle Diagnosetexte ab. Gerade die Vorprüfung für Unreal muss ohne vergrößerten Bildschirm erreichbar sein.
+
+### Wirkung
+
+Die beiden Diagnosebereiche bekommen im kompakten Modus die volle Breite. Größere Fenster zeigen beide Bereiche weiterhin nebeneinander. Prüfablauf, Spielregeln und Runtime-Evidence bleiben unverändert.
+
+### Technischer Effekt
+
+Die neue reine Layoutregel wird ohne grafische Oberfläche an mehreren Grenzwerten getestet. Die Tkinter-Oberfläche ordnet vorhandene Widgets bei Größenänderung um, ohne sie oder ihre Daten neu zu erzeugen. GitHub-Checks beweisen zunächst nur Code und Layoutregel; eine reale 800×600-GUI-Prüfung bleibt Pflicht.

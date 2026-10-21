@@ -1,88 +1,40 @@
 # WICHTIG — AKTUELLER VERBESSERUNGSFOKUS
 
-> Diese Datei enthält **genau einen priorisierten Verbesserungsvorschlag der aktuellen Iteration**. In der nächsten Iteration wird der Fokus neu bewertet und diese Datei aktualisiert. Historische Qualitätsideen bleiben in `CODEQUALITÄT.md` erhalten.
+> Genau ein priorisierter Verbesserungsvorschlag. Historische Einträge bleiben in `CODEQUALITÄT.md`.
 
-## W-2026-08-27-013 — Linux-Klick-&-Start durch echte Dateirechte garantieren
+## W-2026-10-21-014 — CP1-Diagnose auf kleinen Bildschirmen benutzbar halten
 
-**Kategorie:** Portabilität / Launcher / Release-Qualität / Linux  
-**Priorität:** P0  
-**Status:** 🟢 IMPLEMENTIERT + HOSTED GEPRÜFT — finaler Release-Neubau noch offen  
-**Nutzen:** 9/10  
-**Aufwand:** 2/10  
-**Risiko der Umsetzung:** 1/10
+**Kategorie:** CP1-Diagnose / Oberfläche / Barrierefreiheit  
+**Priorität:** P0 (Zugang zur Vorprüfung, nicht Runtime-Freigabe)  
+**Status:** 🟡 IMPLEMENTIERT — echte GUI-Abnahme bei 800 × 600 ausstehend  
+**Nutzen:** 8/10  
+**Aufwand:** 3/10  
+**Risiko:** 2/10
 
 ### Beobachtung
 
-Der Release-Smoke des nach PR #9 erzeugten vollständigen ZIPs bestätigte den Environment-Doctor-Fix: Schema v2, explizite Nachvalidierung und 10/10 Contract-Regressionstests waren grün. Dabei wurde jedoch ein weiterer Portabilitätsfehler sichtbar:
-
-```text
-START_BUNKER_BEATS_INTELLIGENT.sh executable=no
-```
-
-Der Git-Tree bestätigte, dass `START_BUNKER_BEATS_INTELLIGENT.sh`, `START_BUNKER_BEATS_ALL.sh` und der interne Shell-Smoke-Launcher mit Modus `100644` gespeichert waren. Nur `RUN_CP1_UE58_ALL.sh` war bereits `100755`.
+Das Environment-Doctor-Fenster verlangte mindestens 960 × 650 Pixel. Seine zwei festen horizontalen Bereiche und die 670 Pixel breiten Tabellenspalten konnten auf kleineren Displays wichtige Diagnosen abschneiden. Das erschwert den Zugang zur CP1-Vorprüfung.
 
 ### Verbesserungsvorschlag
 
-Alle Linux-Startskripte, die als Start-/Smoke-Einstieg dienen, müssen im Repository selbst als ausführbar (`100755`) versioniert sein. Die Release-Pipeline darf die Rechte nicht künstlich beim Packen reparieren; sonst wäre das ZIP nicht mehr die unveränderte Projektbasis von `main`.
-
-Zusätzlich muss der Package-Integrity-Test die Execute-Bits dauerhaft prüfen.
+Das Diagnosefenster auf 800 × 600 als Mindestgröße einstellen. Unter 1120 Pixel Fensterbreite die Ampel- und Detailbereiche untereinander anordnen; darüber nebeneinander. Die drei Tabellenspalten schmaler beginnen lassen, die Erklärungsspalte aber flexibel ausdehnen. Das Umschalten ohne laufende Prüfungen zu unterbrechen ermöglichen.
 
 ### Grund
 
-`bash START_BUNKER_BEATS_INTELLIGENT.sh` funktioniert auch ohne Execute-Bit, aber ein echtes **Klick-&-Start**-Versprechen benötigt ausführbare Dateien. Dateirechte sind Teil des Release-Artefakts und dürfen nicht als implizite lokale Nacharbeit vorausgesetzt werden.
-
-Ein Paket, dessen Inhalt korrekt ist, dessen Linux-Einstieg aber nach dem Entpacken nicht direkt ausführbar ist, ist für die angestrebte Laienbedienung nur teilweise portabel.
-
-### Umgesetzt
-
-- `Tests/test_cp1_package_integrity.py` prüft jetzt für alle zentralen Linux-Einstiege Existenz und Execute-Bit.
-- folgende Git-Modi sind auf `100755` gehärtet:
-  - `START_BUNKER_BEATS_INTELLIGENT.sh`
-  - `START_BUNKER_BEATS_ALL.sh`
-  - `RUN_CP1_UE58_ALL.sh`
-  - `Build/Scripts/run_cp1_smoke.sh`
-- die Prüfung läuft im bestehenden `ci_verify.py`-Pfad und wird damit bei Hosted Validate sowie vor Release-Paketierung erzwungen.
+Eine Vorprüfung muss auch dann bedienbar bleiben, wenn die Zielmaschine einen kleinen Bildschirm oder eine hohe Skalierung nutzt. Eine verdeckte Diagnosemeldung ist ein echtes Bedienrisiko.
 
 ### Wirkung
 
-- Linux-Klick-&-Start bleibt beim Checkout und im ZIP erhalten
-- kein nachträgliches `chmod +x` als versteckte Benutzerpflicht
-- Release-Paket entspricht weiterhin der tatsächlichen `main`-Projektbasis
-- Regression bei Git-Dateimodi wird automatisch erkannt
-- Start-, Smoke- und CP1-Einstiege verwenden konsistente Unix-Rechte
-- bessere Portabilität und Laienfreundlichkeit
+- Prüf- und Reparaturschaltflächen bleiben im Kopfbereich.
+- Ampel und Detailausgabe nutzen bei 800 × 600 die volle Fensterbreite.
+- Breite Fenster behalten die gleichzeitige Übersicht.
+- Keine Änderung an Prüfentscheidungen, Runtime-Gates oder Spielständen.
+- Reine Grenzwerttests schützen die Layoutentscheidung vor Regressionen.
 
 ### Technischer Effekt
 
-```text
-Git tree mode 100755
-→ checkout erhält Execute-Bit
-→ rsync übernimmt Modus
-→ ZIP speichert Unix-Modus
-→ normaler Linux-Extractor stellt Execute-Bit wieder her
-→ Package-Integrity-Test prüft denselben Vertrag
-```
+`Launcher/core/viewport_layout.py` definiert die Mindestgröße und den Umschaltpunkt. `Launcher/gui/repair_gui.py` setzt die beiden Bereiche je nach Breite in ein ein- oder zweispaltiges Raster. `Scripts/tests/test_environment_gui_contract.py` prüft die Breiten 800, 960, 1024, 1119, 1120, 1180 und 1600.
 
-### Aktueller belegter Zustand
+### Nächster Nachweis
 
-- Environment-Doctor-v2-Core-Smoke: PASS
-- `summary.after` vorhanden
-- fehlende UE 5.8 bleibt korrekt YELLOW
-- Environment-GUI-Contract-Tests: 10/10 PASS
-- Git-Modus-Fehler der Startskripte real im Release-Smoke gefunden
-- Regressionstest für Execute-Bits implementiert
-- Hosted `repository-quality`: PASS auf PR #10 inklusive Iteration Guard
-- Hosted `static-and-contract`: PASS auf PR #10 inklusive Package-Integrity-Execute-Bit-Prüfung
-- CP1 Runtime-Workflow weiterhin korrekt SKIPPED ohne reale UE-Freigabe
-- finaler Release-Neubau aus dem gemergten `main` noch offen
-- echter UE-5.8-CP1-Runtime-Lauf weiterhin `UNOBSERVED/BLOCKED`
-
-### Fertig, wenn
-
-- alle vier Linux-Einstiege im Git-Tree `100755` besitzen
-- `static-and-contract` PASS ist
-- `repository-quality` PASS ist
-- Package-Integrity-Test Execute-Bits PASS meldet
-- PR konfliktfrei integriert ist
-- neues vollständiges ZIP aus dem daraus resultierenden `main` erzeugt wurde
-- lokale ZIP-Struktur, SHA-256 und Execute-Bits erneut geprüft sind
+`static-and-contract` und `repository-quality` müssen auf dem PR-Commit grün sein. Danach muss ein echter Linux-Tkinter-Lauf bei 800 × 600 und hoher Skalierung prüfen, dass Texte, Status und Schaltflächen erreichbar sind. Unreal Engine 5.8, Ruleset und CP1-Runtime bleiben unabhängig davon weiterhin offen.
