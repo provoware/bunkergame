@@ -822,3 +822,7 @@ Frühzeitiger, reproduzierbarer Fehlerbericht für ungültige UE-Versiondateien;
 
 ### Technischer Effekt
 `runner_readiness.py` prüft `isinstance(data, dict)`; `test_runner_evidence_binding.py` prüft sechs JSON-Nicht-Objekte; `ci_verify.py` ruft die Testdatei auf; `test_prerelease_ci_wiring.py` kontrolliert die Einbindung.
+
+### Nachträglicher technischer Nachweis (23.10.2026)
+
+**Geprüfter GitHub-HEAD:** `40f94213d732cf5349fd8c97096a2e8d6a193d5b`. **Validate:** PASS ([Lauf 39954719607](https://github.com/provoware/bunkergame/actions/runs/39954719607)); **Quality Guard:** PASS ([Lauf 39954719562](https://github.com/provoware/bunkergame/actions/runs/39954719562)). In der zentralen CI wurden 22 Runner-Bindungs-Regressionstests ausgeführt; die Qualitätsprüfung führte insgesamt 132 Tests erfolgreich aus. Der neue Negativtest prüft sechs Nicht-Objekt-Varianten. `cp1-runtime` wurde **SKIPPED**; echte UE-5.8-Runtime bleibt BLOCKED/UNOBSERVED.
