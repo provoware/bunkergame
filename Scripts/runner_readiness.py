@@ -128,9 +128,16 @@ def read_engine_version(root: Path | None) -> tuple[bool, dict | None, str]:
             result[key] = value
         return result
 
+    def reject_non_finite_constant(value: str) -> None:
+        # Python's json decoder accepts NaN/Infinity by default, although
+        # they are not valid JSON and must not certify runner readiness.
+        raise ValueError(f"non-finite JSON constant: {value}")
+
     try:
         data = json.loads(
-            path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicate_keys
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicate_keys,
+            parse_constant=reject_non_finite_constant,
         )
     except (OSError, UnicodeError, ValueError) as exc:
         return False, None, f"invalid Build.version: {exc}"

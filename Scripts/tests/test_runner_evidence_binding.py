@@ -291,6 +291,37 @@ class EngineVersionTypeTests(unittest.TestCase):
                 self.assertIsNone(raw)
                 self.assertIn("duplicate JSON key", detail)
 
+    def test_non_finite_json_constants_are_rejected(self):
+        """Python's permissive NaN/Infinity tokens are not valid JSON."""
+        for payload in (
+            '{"MajorVersion":5,"MinorVersion":8,"meta":NaN}',
+            '{"MajorVersion":5,"MinorVersion":8,"meta":[Infinity]}',
+            '{"MajorVersion":5,"MinorVersion":8,"meta":{"value":-Infinity}}',
+            '{"MajorVersion":NaN,"MinorVersion":8}',
+        ):
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                version = root / "Engine" / "Build" / "Build.version"
+                version.parent.mkdir(parents=True)
+                version.write_text(payload, encoding="utf-8")
+                ok, raw, detail = readiness.read_engine_version(root)
+                self.assertFalse(ok)
+                self.assertIsNone(raw)
+                self.assertIn("non-finite JSON constant", detail)
+
+    def test_finite_json_metadata_still_passes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            version = root / "Engine" / "Build" / "Build.version"
+            version.parent.mkdir(parents=True)
+            version.write_text(
+                '{"MajorVersion":5,"MinorVersion":8,"meta":{"value":1.25,"flags":[true,false,null]}}',
+                encoding="utf-8",
+            )
+            ok, raw, detail = readiness.read_engine_version(root)
+            self.assertTrue(ok, detail)
+            self.assertEqual(raw["meta"]["value"], 1.25)
+
     def test_valid_engine_version_still_passes(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

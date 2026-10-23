@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-24 — Nicht endliche JSON-Konstanten in UE Build.version zurückweisen (Entwicklungszweig)
+
+- P0: `NaN`, `Infinity` und `-Infinity` auch in verschachtelten Versionmetadaten als ungültiges JSON kontrolliert abweisen.
+- Zwei neue Regressionstestmethoden: vier negative Teilfälle und ein positiver Fall mit endlichen Metadaten; isolierter Parser-Nachweis 7/7 PASS.
+- Status: IMPLEMENTED; vollständige GitHub-CI und echte UE-5.8-CP1-Runtime getrennt auswerten. Keine Änderung am Hauptzweig, kein Merge, kein Release.
+
+---
+
 ## 2026-10-23 — UE Build.version Dekodierung und JSON-Schlüssel absichern (Entwicklungszweig)
 
 - Runner-Readiness: ungültiges UTF-8 und doppelte JSON-Schlüssel werden als FAIL behandelt, nicht als unbehandelte Ausnahme oder mehrdeutiger PASS.
