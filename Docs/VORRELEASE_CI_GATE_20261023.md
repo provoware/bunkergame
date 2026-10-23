@@ -33,3 +33,23 @@
 **Rollback:** Nur diesen Entwicklungszweig/PR zurücknehmen, main unverändert lassen.  
 **Nächste konkrete Implementierung:** Nach grünen CI-Gates P0-Branchschutz/Runner-Bootstrap regelkonform nachweisen; danach CP1-UE-5.8-Lauf und Interaction-Vertikalschnitt.  
 **Release:** gesperrt. **Merge:** nur nach erfolgreichen Pflichtprüfungen. **Persönliche Endabnahme:** zurückgestellt.
+
+## Nachträglich auf GitHub bestätigte technische Evidenz
+
+**Geprüfter Entwicklungs-HEAD:** `3c6aeaac6d627515607ecebaaa8159e15e40eb0a`  
+**Entwurfs-PR:** https://github.com/provoware/bunkergame/pull/13
+
+| Prüfkette | Ergebnis | Konkreter Nachweis |
+|---|---|---|
+| Validate / static-and-contract | **PASS** | https://github.com/provoware/bunkergame/actions/runs/39919004091 |
+| Quality Guard / repository-quality | **PASS** | https://github.com/provoware/bunkergame/actions/runs/39919004128 |
+| P0-Control-Plane-Regression | **PASS** | Quality Guard, gleicher Lauf |
+| PR-Iteration-Guard | **PASS** | Quality Guard, gleicher Lauf |
+| Git-Patch-Leerraumprüfung | **PASS** | Quality Guard, gleicher Lauf |
+| Vorrelease-Matrix-Gate | **PASS (Struktur, nicht Release)** | Validate-Protokoll `VORRELEASE_MATRIX: PASS` |
+| Tatsächliche UE-5.8-Runtime | **BLOCKED/UNOBSERVED** | kein passender Runtime-Nachweis |
+| Schutzregelsatz auf main | **BLOCKED** | unverändert; kein Schutz umgangen |
+
+Vor dem erfolgreichen Qualitätslauf wurde eine unvollständige `WICHTIG.md`-Abschnittsstruktur im ersten PR-Prüflauf erkannt (**FAIL**, https://github.com/provoware/bunkergame/actions/runs/39918938320) und durch Wiederherstellung der geforderten Begriffe **Verbesserungsvorschlag, Grund, Wirkung** behoben. Die Folgeprüfung war grün.
+
+**Hinweis:** Diese Dokumentationsaktualisierung erzeugt selbst einen neuen Commit; dessen GitHub-Prüfungen sind erneut separat zu kontrollieren. Die obigen PASS-Nachweise beziehen sich ausdrücklich auf den angegebenen SHA.
