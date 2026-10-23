@@ -119,6 +119,7 @@ def read_engine_version(root: Path | None) -> tuple[bool, dict | None, str]:
     path = root / "Engine" / "Build" / "Build.version"
     if not path.is_file():
         return False, None, f"missing {path}"
+
     def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
         result: dict[str, object] = {}
         for key, value in pairs:
