@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-23 — Runner Build.version JSON-Form absichern (Entwicklungszweig)
+
+- P0-Readiness: `Build.version` muss ein JSON-Objekt sein. JSON-Arrays und Skalare werden kontrolliert abgewiesen statt durch `AttributeError` abzubrechen.
+- Sechs Negativfälle ergänzt; vorhandene Runner-Bindungstests in den zentralen Validate-Lauf eingebunden und gegen stilles Entfernen abgesichert.
+- Status: IMPLEMENTED; GitHub-CI-Nachweise folgen am finalen HEAD. Kein UE-5.8-Runtime-PASS, kein Branchschutz-PASS und kein Release.
+
+---
+
+
 ## 2026-08-27 — UE 5.8 Runner Bootstrap Acceptance
 
 ### Added
