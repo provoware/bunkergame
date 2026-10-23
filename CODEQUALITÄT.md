@@ -800,3 +800,25 @@ Ausgelassene, doppelte oder versehentlich abgekoppelte Vorrelease-Tests führen 
 
 ### Technischer Effekt
 `Validate → ci_verify.py → prerelease_gate.py + drei Regressionstests`; echte UE-5.8-Tests, Spielverläufe und Branchschutz bleiben eigenständige Pflichtprüfungen.
+
+---
+
+## CQ-2026-10-23-015 — Ungültige UE-Build.version ohne Absturz abweisen
+
+**Iteration:** Runner Version Shape Guard · **Kategorie:** P0 / Runner-Readiness / Fail-Closed  
+**Status:** Implementiert; GitHub-Prüfung noch ausstehend.
+
+### Beobachtung
+Gültiges JSON muss nicht zwingend ein Objekt sein. Bei `Build.version` mit JSON-Array oder Skalar führte `data.get()` in der Readiness-Erkennung zu einer unbehandelten Ausnahme. Die bisherige Testdatei war nicht Teil des zentralen Validate-Kommandos.
+
+### Verbesserungsvorschlag
+Die äußere Form von `Build.version` vor jedem Feldzugriff prüfen und die bestehenden Runner-Bindungstests samt sechs neuen Nicht-Objekt-Negativfällen als verbindlichen CI-Bestandteil ausführen.
+
+### Grund
+Ein ungültiges Maschinenprofil muss geordnet scheitern und darf keine unklare Ausnahme statt eines prüfbaren Readiness-Ergebnisses auslösen. Tests müssen im tatsächlichen CI-Pfad liegen.
+
+### Wirkung
+Frühzeitiger, reproduzierbarer Fehlerbericht für ungültige UE-Versiondateien; bessere Erkennung von Regressionen bei Runner-Identität und Readiness-Verträgen. Kein Runtime-PASS und keine Veränderung an Schutzregeln.
+
+### Technischer Effekt
+`runner_readiness.py` prüft `isinstance(data, dict)`; `test_runner_evidence_binding.py` prüft sechs JSON-Nicht-Objekte; `ci_verify.py` ruft die Testdatei auf; `test_prerelease_ci_wiring.py` kontrolliert die Einbindung.
