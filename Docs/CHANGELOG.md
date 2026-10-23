@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-23 — UE Build.version Dekodierung und JSON-Schlüssel absichern (Entwicklungszweig)
+
+- Runner-Readiness: ungültiges UTF-8 und doppelte JSON-Schlüssel werden als FAIL behandelt, nicht als unbehandelte Ausnahme oder mehrdeutiger PASS.
+- Drei neue Regressionstestmethoden einschließlich gültigem 5.8-Normalfall.
+- Status: IMPLEMENTED; GitHub-CI auf neuem HEAD noch ausstehend. UE-5.8-CP1-Runtime bleibt BLOCKED/UNOBSERVED. Kein Merge, kein Release.
+
+---
+
 ## 2026-10-23 — Runner Build.version JSON-Form absichern (Entwicklungszweig)
 
 - P0-Readiness: `Build.version` muss ein JSON-Objekt sein. JSON-Arrays und Skalare werden kontrolliert abgewiesen statt durch `AttributeError` abzubrechen.
