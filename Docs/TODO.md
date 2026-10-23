@@ -119,6 +119,8 @@ Bei erstem echten Build-/Runtime-Fehler:
 
 ## P0.2 — GitHub Self-hosted UE-5.8-Runner
 
+**P0-Teilpaket (24.10.2026, Zweig `fix/runner-json-nonfinite-20261024-0038`):** Python akzeptierte `NaN`/`Infinity`/`-Infinity` in `Build.version` trotz ungültigem JSON. Der Parser weist diese Konstanten nun kontrolliert zurück; vier negative und ein positiver Testfall ergänzt. **Status: IMPLEMENTED; isolierte Parserprüfung 7/7 PASS, GitHub-CI nach PR-Erstellung auswerten.** Keine Änderung am Runner-Zugriff, keine UE-5.8-Runtime-Evidence. **NEXT BEST ACTION:** vertrauenswürdigen UE-5.8-Runner unter bestehenden Sicherheitsbedingungen bereitstellen, Bootstrap nachweisen, danach echten CP1-Build/Spawn/Movement/Gate ausführen. Bei Blockade unabhängige P0-Arbeit mit neuen reproduzierbaren Befunden fortsetzen.
+
 **P0-Teilpaket (23.10.2026, Entwicklungszweig `fix/runner-buildversion-strict-20261023-1929`):** Mehrdeutige JSON-Schlüssel und ungültiges UTF-8 in `Build.version` werden fail-closed abgelehnt. Die vorhandene CI-verdrahtete Runner-Testdatei erhält Negativ- und Normalfalltests. **Status: IMPLEMENTED; GitHub-Validate und Quality Guard auf Code-HEAD `d810e8abdb642d18d53ed2bfe4fc58450f21803d` PASS (23.10.2026).** Kein UE-5.8-Runtime-Nachweis, keine Änderung am Runner-Zugriff. Nächste Hauptaktion bleibt: vertrauenswürdigen UE-5.8-Runner bereitstellen, Bootstrap und CP1 mit frischer Evidence ausführen.
 
 
