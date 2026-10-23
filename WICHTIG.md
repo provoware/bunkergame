@@ -2,25 +2,24 @@
 
 > Genau ein priorisierter Vorschlag. Historische Vorschläge stehen append-only in `CODEQUALITÄT.md`.
 
-## W-2026-10-23-016 — Mehrdeutige oder unlesbare UE-Versiondateien sicher ablehnen
+## W-2026-10-24-017 — Ungültige JSON-Zahlen in UE-Versiondateien abweisen
 
-**Kategorie:** P0 / Runner / Integrität / Regression  
+**Kategorie:** P0 / Runner-Readiness / Evidence-Integrität  
 **Priorität:** P0  
-**Status:** IMPLEMENTED; GitHub-Validate und Quality Guard auf geprüftem Code-HEAD `d810e8abdb642d18d53ed2bfe4fc58450f21803d` PASS (23.10.2026)  
-**Nutzen:** 9/10 · **Änderungsrisiko:** niedrig
+**Status:** IMPLEMENTED auf Entwicklungszweig; isolierter Parser-Negativ-/Positivtest 7/7 PASS (24.10.2026); GitHub-Gesamtprüfung und UE-5.8-Runtime separat nachzuweisen.  
+**Nutzen:** 7/10 · **Änderungsrisiko:** niedrig
 
 ### Beobachtung
-Ein nicht UTF-8-kodiertes `Build.version` löste bisher eine unbehandelte Ausnahme aus. Doppelte JSON-Schlüssel überschrieben unbemerkt frühere Werte, sodass ein mehrdeutiges Versionsprofil als gültig gelten konnte.
+Pythons Standard-JSON-Parser akzeptiert die nicht normgerechten Werte `NaN`, `Infinity` und `-Infinity` auch in verschachtelten Metadaten. Die bisherige Runner-Versionprüfung konnte dadurch ein ungültiges `Build.version` als gültige UE-5.8-Readiness akzeptieren.
 
 ### Verbesserungsvorschlag
-Fehlerhafte UTF-8-Kodierung und doppelte JSON-Schlüssel in der Versionsdatei kontrolliert ablehnen; Regressionstests für beide Fehlerarten und den gültigen UE-5.8-Normalfall ausführen.
+Nicht endliche JSON-Konstanten bereits beim Einlesen konsequent als kontrolliertes FAIL zurückweisen. Vier Negativfälle und einen gültigen Metadaten-Normalfall in die bereits verpflichtende Runner-Testdatei aufnehmen.
 
 ### Grund
-Die Runner-Bereitschaft muss auf eindeutigen Daten beruhen; widersprüchliche Angaben dürfen niemals als verlässlicher Versionsnachweis gelten.
+Ein Maschinenprofil darf nur aus syntaktisch gültigem, eindeutigem JSON abgeleitet werden. Der Readiness-Status ist eine Vorbedingung für spätere Runtime-Prüfungen und darf ungültige Eingabedaten nicht still akzeptieren.
 
 ### Wirkung und Abnahmekriterien
-- Ungültiges UTF-8 liefert ein geordnetes FAIL statt einer Ausnahme.
-- Doppelte Versionsschlüssel und verschachtelte Duplikate liefern FAIL.
-- Eindeutige UE-5.8-Version liefert weiterhin PASS in der isolierten Parserprüfung.
-- `ci_verify.py`, `repo_quality.py` und Iteration Guard bestehen auf dem neuen GitHub-HEAD.
-- UE-5.8-Runner, echter CP1-Lauf und Main-Branchschutz bleiben eigenständige offene Pflichten.
+- `NaN`, `Infinity` und `-Infinity` werden auch in verschachtelten Feldern ohne Absturz abgewiesen.
+- Endliche numerische Metadaten sowie der UE-5.8-Normalfall bleiben akzeptiert.
+- Zentrale Validate- und Quality-Guard-Prüfungen müssen am finalen GitHub-HEAD erfolgreich sein.
+- CP1-Runtime, Spielverläufe und Main-Branchschutz bleiben ausdrücklich eigene offene Pflichtprüfungen.
