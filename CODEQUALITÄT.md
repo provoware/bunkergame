@@ -781,3 +781,22 @@ Der Release-Smoke nach dem Environment-Doctor-Fix zeigte, dass `START_BUNKER_BEA
 **Regressionserkennung:** hoch  
 **Gameplay-Risiko:** keines
 
+
+---
+
+## CQ-2026-10-23-014 — Vorrelease-Pflichten als festen CI-Vertrag absichern
+
+**Iteration:** Vorrelease CI Wiring · **Kategorie:** P0 / Regression / Release-Integrität
+**Status:** Implementiert; GitHub-Prüfungen noch zu bestätigen.
+
+### Beobachtung
+Eine dokumentierte Vorrelease-Pflichtmatrix reicht nicht aus, wenn der zentrale Validate-Aufruf ihre Prüfung überspringt. Dadurch kann die normale CI grün sein, obwohl Release-Pflichten nicht geprüft wurden.
+
+### Verbesserung
+Den vorhandenen Matrix-Vertrag und alle zugehörigen Regressionstests in `Scripts/ci_verify.py` ausführen. Ein eigener Test liest die tatsächliche Python-Befehlsliste, verlangt jeden Pflichtaufruf exakt einmal und prüft den Aufruf des zentralen Prüfers durch `validate.yml`.
+
+### Wirkung
+Ausgelassene, doppelte oder versehentlich abgekoppelte Vorrelease-Tests führen künftig zu einem reproduzierbaren Fehler. Die CI deckt damit die Vollständigkeit der **Prüfverkabelung** ab, nicht die fertige Unreal-Runtime.
+
+### Technischer Effekt
+`Validate → ci_verify.py → prerelease_gate.py + drei Regressionstests`; echte UE-5.8-Tests, Spielverläufe und Branchschutz bleiben eigenständige Pflichtprüfungen.

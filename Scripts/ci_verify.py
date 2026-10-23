@@ -18,6 +18,10 @@ COMMANDS = [
     [sys.executable, "Tests/Quality/test_solution_learning.py"],
     [sys.executable, "Tests/Quality/test_regression_learning.py"],
     [sys.executable, "Tests/test_toolchain_context.py"],
+    [sys.executable, "Scripts/prerelease_gate.py"],
+    [sys.executable, "Scripts/tests/test_prerelease_matrix.py"],
+    [sys.executable, "Scripts/tests/test_prerelease_elements.py"],
+    [sys.executable, "Scripts/tests/test_prerelease_ci_wiring.py"],
 ]
 
 
