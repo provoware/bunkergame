@@ -123,6 +123,8 @@ def read_engine_version(root: Path | None) -> tuple[bool, dict | None, str]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return False, None, f"invalid Build.version: {exc}"
+    if not isinstance(data, dict):
+        return False, None, "invalid Build.version: expected JSON object"
     major = data.get("MajorVersion")
     minor = data.get("MinorVersion")
     ok = (

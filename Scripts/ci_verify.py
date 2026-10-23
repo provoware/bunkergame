@@ -22,6 +22,7 @@ COMMANDS = [
     [sys.executable, "Scripts/tests/test_prerelease_matrix.py"],
     [sys.executable, "Scripts/tests/test_prerelease_elements.py"],
     [sys.executable, "Scripts/tests/test_prerelease_ci_wiring.py"],
+    [sys.executable, "Scripts/tests/test_runner_evidence_binding.py"],
 ]
 
 
