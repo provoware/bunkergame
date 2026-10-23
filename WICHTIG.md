@@ -6,7 +6,7 @@
 
 **Kategorie:** P0 / Runner-Readiness / Evidence-Integrität  
 **Priorität:** P0  
-**Status:** IMPLEMENTED auf Entwicklungszweig; isolierter Parser-Negativ-/Positivtest 7/7 PASS (24.10.2026); GitHub-Gesamtprüfung und UE-5.8-Runtime separat nachzuweisen.  
+**Status:** IMPLEMENTED; isolierte Parserprüfung 7/7 PASS und GitHub Validate/Quality Guard auf Code-HEAD `4f70738799bc75431af5ff19ad70a065f47d5caa` PASS (24.10.2026); UE-5.8-Runtime SKIPPED/BLOCKED, finale Dokumentations-CI separat zu prüfen.  
 **Nutzen:** 7/10 · **Änderungsrisiko:** niedrig
 
 ### Beobachtung
