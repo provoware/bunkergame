@@ -4,7 +4,7 @@
 
 - Runner-Readiness: ungültiges UTF-8 und doppelte JSON-Schlüssel werden als FAIL behandelt, nicht als unbehandelte Ausnahme oder mehrdeutiger PASS.
 - Drei neue Regressionstestmethoden einschließlich gültigem 5.8-Normalfall.
-- Status: IMPLEMENTED; GitHub-CI auf neuem HEAD noch ausstehend. UE-5.8-CP1-Runtime bleibt BLOCKED/UNOBSERVED. Kein Merge, kein Release.
+- Status: IMPLEMENTED; GitHub-Validate und Quality Guard auf Code-HEAD `d810e8abdb642d18d53ed2bfe4fc58450f21803d` PASS (23.10.2026). UE-5.8-CP1-Runtime bleibt BLOCKED/UNOBSERVED. Kein Merge, kein Release.
 
 ---
 
