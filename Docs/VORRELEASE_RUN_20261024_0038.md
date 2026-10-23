@@ -19,9 +19,9 @@ Pythons `json.loads` akzeptierte bei sonst gültigem `Build.version` nicht normg
 | Vier Negativfälle | IMPLEMENTED | `test_non_finite_json_constants_are_rejected`: NaN im Metadatenfeld, Infinity in Liste, -Infinity in verschachteltem Objekt, NaN als MajorVersion. |
 | Gültige endliche Metadaten | IMPLEMENTED | `test_finite_json_metadata_still_passes`: 5.8 mit endlicher Dezimalzahl und JSON-Bool/Null. |
 | Isolierte Parser-Reproduktion | PASS | 7/7 lokale `unittest`-Fälle einschließlich vorhandener Duplikat- und Formfälle, 24.10.2026; reproduzierte Parserlogik, **nicht** vollständiger Repository-Testlauf. |
-| GitHub Validate | UNOBSERVED | Auf finalem PR-HEAD separat zu prüfen. |
-| GitHub Quality Guard / Iteration Guard | UNOBSERVED | Auf finalem PR-HEAD separat zu prüfen. |
-| Echte UE-5.8-Runtime | BLOCKED | Kein vertrauenswürdiger UE-5.8-Runner / keine frische CP1-Evidence; SKIPPED ist kein PASS. |
+| GitHub Validate | PASS (geprüfter HEAD) | [static-and-contract #40035142309](https://github.com/provoware/bunkergame/actions/runs/40035142309), `CI_VERIFY: PASS`, Runner-Bindung 27 Tests. |
+| GitHub Quality Guard / Iteration Guard | PASS (geprüfter HEAD) | [repository-quality #40035142335](https://github.com/provoware/bunkergame/actions/runs/40035142335), 137 Python-Tests, Iteration Guard PASS. |
+| Echte UE-5.8-Runtime | SKIPPED / BLOCKED | [CP1 #40035142370](https://github.com/provoware/bunkergame/actions/runs/40035142370) übersprungen; kein vertrauenswürdiger UE-5.8-Runner / keine frische CP1-Evidence. |
 | Main-Branchschutz | BLOCKED | Adminschutz nicht verändert; API-Lesezugriff auf Branch-Protection meldete 403. |
 
 ## Vorrelease-Pflichtmatrix
@@ -30,4 +30,4 @@ Pythons `json.loads` akzeptierte bei sonst gültigem `Build.version` nicht normg
 ## Nächste konkrete Implementierung
 Vertrauenswürdigen UE-5.8-Runner unter vorhandenen Sicherheitsbedingungen bereitstellen; Bootstrap-Readiness mit aktuellem SHA und Maschinenfingerprint prüfen; echten CP1-Build, Character Spawn, Bewegung, Telemetrie und Gate mit frischer Evidence ausführen. Wenn externe Bereitstellung weiter blockiert, nur weitere unabhängige P0-Pflichten mit reproduzierbarem Befund bearbeiten. Keine persönliche Sicht-/Kubuntu-Endabnahme vor vollständig technisch geprüftem und eingefrorenem Kandidaten.
 
-**Hinweis:** Dieser Bericht dokumentiert den Entwicklungsstand vor abschließender GitHub-CI. CI-Links und finaler SHA werden nach tatsächlichem Lauf ergänzt.
+**CI-Evidence:** Auf dem geprüften PR-HEAD `4f70738799bc75431af5ff19ad70a065f47d5caa` sind Validate und Quality Guard erfolgreich; der echte CP1-Workflow wurde übersprungen. Diese Dokumentation wird nach dem geprüften Code-HEAD aktualisiert. Der abschließende Dokumentations-HEAD erfordert einen eigenen CI-Lauf und darf erst danach als geprüft bezeichnet werden.
