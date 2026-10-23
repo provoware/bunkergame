@@ -2,24 +2,24 @@
 
 > Genau ein priorisierter Vorschlag. Historische Vorschläge stehen append-only in `CODEQUALITÄT.md`.
 
-## W-2026-10-23-014 — Vorrelease-Prüfungen dauerhaft in Validate ausführen
+## W-2026-10-23-015 — UE-5.8-Runner-Readiness bei fehlerhafter Build.version kontrolliert sperren
 
-**Kategorie:** P0 / Prüfqualität / Vorrelease
-**Priorität:** P0
-**Status:** IMPLEMENTIERT; vollständiger GitHub-PR-Prüflauf noch zu bestätigen
-**Nutzen:** 10/10 · **Änderungsrisiko:** niedrig
+**Kategorie:** P0 / Runner / Sicherheit / Regression  
+**Priorität:** P0  
+**Status:** IMPLEMENTIERT; GitHub-Prüflauf auf dem Entwicklungszweig ausstehend  
+**Nutzen:** 9/10 · **Änderungsrisiko:** niedrig
 
 ### Beobachtung
-Die auf einem Entwicklungszweig vorhandene Vorrelease-Pflichtmatrix und ihre Regressionstests wurden von `Scripts/ci_verify.py` nicht ausgeführt. Ein grüner Standard-Validate-Lauf konnte daher die 40 Anforderungen unbeobachtet lassen.
+`Scripts/runner_readiness.py` las `Build.version` als JSON und verwendete anschließend `.get()` ohne Prüfung des äußeren Datentyps. Gültiges JSON mit Array, Zahl, Text, Boolean oder null löste dadurch einen unbehandelten Fehler aus, statt die Maschinenbereitschaft geordnet abzulehnen.
 
 ### Verbesserungsvorschlag
-`Scripts/ci_verify.py` ruft den Matrix-Vertrag und die drei zugehörigen Tests genau einmal auf. Ein neuer Negativtest erkennt fehlende oder doppelte Einträge und bestätigt den Aufruf durch den bestehenden Validate-Workflow.
+Vor dem Zugriff auf Versionsfelder ausdrücklich ein JSON-Objekt verlangen. Sechs Negativfälle als Regressionstest ergänzen und die gesamte Runner-Bindungs-Testdatei verbindlich in `Scripts/ci_verify.py` aufnehmen; den CI-Aufruf durch einen Verdrahtungsvertrag schützen.
 
 ### Grund und Nachweisgrenzen
-Statische Vertragsprüfungen sind **kein** UE-5.8-Build, kein vollständiger Spielverlauf und kein Nachweis für eine persönliche Abnahme. P0-Branchschutz und Self-hosted-Runner bleiben getrennte offene Gates.
+Der Readiness-Fehler darf nicht mit einem CP1-Gameplay-Fehler verwechselt werden. Auch nach erfolgreichem statischem Test bleiben der echte UE-5.8-Runner, CP1-Runtime, Main-Branchschutz und persönliche Endabnahme unabhängig und offen.
 
 ### Wirkung und Fertig, wenn
-- neuer Negativtest und gesamte `Scripts/ci_verify.py`-Kette PASS
-- `repository-quality` und Iteration Guard PASS
-- GitHub-PR-Prüfungen auf genau dem neuen Commit erfolgreich
-- nach erfolgreicher technischer Prüfung gesonderte, kontrollierte PR-Übernahme möglich (kein automatischer Merge)
+- Nicht-Objekt-`Build.version` ergibt `FAIL` ohne Ausnahme
+- sechs neue Negativfälle und vorhandene Runner-Bindungstests bestehen
+- `ci_verify.py`, `repository-quality` und Iteration Guard auf dem tatsächlichen PR-HEAD PASS
+- ein echter UE-5.8-Lauf wird erst mit eigener Runtime-Evidence bewertet
