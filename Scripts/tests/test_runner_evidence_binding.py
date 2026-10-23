@@ -252,5 +252,19 @@ class EngineVersionTypeTests(unittest.TestCase):
         self.assertFalse(ok)
 
 
+    def test_non_object_engine_version_fails_closed(self):
+        """Valid JSON arrays/scalars must report FAIL, not crash the runner."""
+        for value in ([], [5, 8], "5.8", 58, True, None):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                version = root / "Engine" / "Build" / "Build.version"
+                version.parent.mkdir(parents=True)
+                version.write_text(json.dumps(value), encoding="utf-8")
+                ok, raw, detail = readiness.read_engine_version(root)
+                self.assertFalse(ok)
+                self.assertIsNone(raw)
+                self.assertIn("expected JSON object", detail)
+
+
 if __name__ == "__main__":
     unittest.main()
