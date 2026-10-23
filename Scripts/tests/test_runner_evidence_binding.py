@@ -270,7 +270,7 @@ class EngineVersionTypeTests(unittest.TestCase):
             root = Path(td)
             version = root / "Engine" / "Build" / "Build.version"
             version.parent.mkdir(parents=True)
-            version.write_bytes(b"\\xff".replace(b"\\xff", bytes([255])))
+            version.write_bytes(bytes([255]))
             ok, raw, detail = readiness.read_engine_version(root)
             self.assertFalse(ok)
             self.assertIsNone(raw)
