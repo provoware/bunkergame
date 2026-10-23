@@ -2,24 +2,25 @@
 
 > Genau ein priorisierter Vorschlag. Historische Vorschläge stehen append-only in `CODEQUALITÄT.md`.
 
-## W-2026-10-23-015 — UE-5.8-Runner-Readiness bei fehlerhafter Build.version kontrolliert sperren
+## W-2026-10-23-016 — Mehrdeutige oder unlesbare UE-Versiondateien sicher ablehnen
 
-**Kategorie:** P0 / Runner / Sicherheit / Regression  
+**Kategorie:** P0 / Runner / Integrität / Regression  
 **Priorität:** P0  
-**Status:** IMPLEMENTIERT; GitHub-Validate und Quality Guard auf geprüftem HEAD `40f94213d732cf5349fd8c97096a2e8d6a193d5b` PASS  
+**Status:** IMPLEMENTED; GitHub-Validate und Quality Guard auf geprüftem Code-HEAD `d810e8abdb642d18d53ed2bfe4fc58450f21803d` PASS (23.10.2026)  
 **Nutzen:** 9/10 · **Änderungsrisiko:** niedrig
 
 ### Beobachtung
-`Scripts/runner_readiness.py` las `Build.version` als JSON und verwendete anschließend `.get()` ohne Prüfung des äußeren Datentyps. Gültiges JSON mit Array, Zahl, Text, Boolean oder null löste dadurch einen unbehandelten Fehler aus, statt die Maschinenbereitschaft geordnet abzulehnen.
+Ein nicht UTF-8-kodiertes `Build.version` löste bisher eine unbehandelte Ausnahme aus. Doppelte JSON-Schlüssel überschrieben unbemerkt frühere Werte, sodass ein mehrdeutiges Versionsprofil als gültig gelten konnte.
 
 ### Verbesserungsvorschlag
-Vor dem Zugriff auf Versionsfelder ausdrücklich ein JSON-Objekt verlangen. Sechs Negativfälle als Regressionstest ergänzen und die gesamte Runner-Bindungs-Testdatei verbindlich in `Scripts/ci_verify.py` aufnehmen; den CI-Aufruf durch einen Verdrahtungsvertrag schützen.
+Fehlerhafte UTF-8-Kodierung und doppelte JSON-Schlüssel in der Versionsdatei kontrolliert ablehnen; Regressionstests für beide Fehlerarten und den gültigen UE-5.8-Normalfall ausführen.
 
-### Grund und Nachweisgrenzen
-Der Readiness-Fehler darf nicht mit einem CP1-Gameplay-Fehler verwechselt werden. Auch nach erfolgreichem statischem Test bleiben der echte UE-5.8-Runner, CP1-Runtime, Main-Branchschutz und persönliche Endabnahme unabhängig und offen.
+### Grund
+Die Runner-Bereitschaft muss auf eindeutigen Daten beruhen; widersprüchliche Angaben dürfen niemals als verlässlicher Versionsnachweis gelten.
 
-### Wirkung und Fertig, wenn
-- Nicht-Objekt-`Build.version` ergibt `FAIL` ohne Ausnahme
-- sechs neue Negativfälle und vorhandene Runner-Bindungstests bestehen
-- `ci_verify.py`, `repository-quality` und Iteration Guard auf dem geprüften HEAD PASS: [Validate](https://github.com/provoware/bunkergame/actions/runs/39954719607), [Quality Guard](https://github.com/provoware/bunkergame/actions/runs/39954719562)
-- ein echter UE-5.8-Lauf wird erst mit eigener Runtime-Evidence bewertet
+### Wirkung und Abnahmekriterien
+- Ungültiges UTF-8 liefert ein geordnetes FAIL statt einer Ausnahme.
+- Doppelte Versionsschlüssel und verschachtelte Duplikate liefern FAIL.
+- Eindeutige UE-5.8-Version liefert weiterhin PASS in der isolierten Parserprüfung.
+- `ci_verify.py`, `repo_quality.py` und Iteration Guard bestehen auf dem neuen GitHub-HEAD.
+- UE-5.8-Runner, echter CP1-Lauf und Main-Branchschutz bleiben eigenständige offene Pflichten.

@@ -265,6 +265,42 @@ class EngineVersionTypeTests(unittest.TestCase):
                 self.assertIsNone(raw)
                 self.assertIn("expected JSON object", detail)
 
+    def test_invalid_utf8_engine_version_fails_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            version = root / "Engine" / "Build" / "Build.version"
+            version.parent.mkdir(parents=True)
+            version.write_bytes(bytes([255]))
+            ok, raw, detail = readiness.read_engine_version(root)
+            self.assertFalse(ok)
+            self.assertIsNone(raw)
+            self.assertIn("invalid Build.version", detail)
+
+    def test_duplicate_version_keys_are_rejected(self):
+        for payload in (
+            '{"MajorVersion":4,"MajorVersion":5,"MinorVersion":8}',
+            '{"MajorVersion":5,"MinorVersion":8,"meta":{"x":1,"x":2}}',
+        ):
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                version = root / "Engine" / "Build" / "Build.version"
+                version.parent.mkdir(parents=True)
+                version.write_text(payload, encoding="utf-8")
+                ok, raw, detail = readiness.read_engine_version(root)
+                self.assertFalse(ok)
+                self.assertIsNone(raw)
+                self.assertIn("duplicate JSON key", detail)
+
+    def test_valid_engine_version_still_passes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            version = root / "Engine" / "Build" / "Build.version"
+            version.parent.mkdir(parents=True)
+            version.write_text('{"MajorVersion":5,"MinorVersion":8}', encoding="utf-8")
+            ok, raw, detail = readiness.read_engine_version(root)
+            self.assertTrue(ok, detail)
+            self.assertEqual(raw, {"MajorVersion": 5, "MinorVersion": 8})
+
 
 if __name__ == "__main__":
     unittest.main()

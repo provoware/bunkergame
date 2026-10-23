@@ -826,3 +826,25 @@ Frühzeitiger, reproduzierbarer Fehlerbericht für ungültige UE-Versiondateien;
 ### Nachträglicher technischer Nachweis (23.10.2026)
 
 **Geprüfter GitHub-HEAD:** `40f94213d732cf5349fd8c97096a2e8d6a193d5b`. **Validate:** PASS ([Lauf 39954719607](https://github.com/provoware/bunkergame/actions/runs/39954719607)); **Quality Guard:** PASS ([Lauf 39954719562](https://github.com/provoware/bunkergame/actions/runs/39954719562)). In der zentralen CI wurden 22 Runner-Bindungs-Regressionstests ausgeführt; die Qualitätsprüfung führte insgesamt 132 Tests erfolgreich aus. Der neue Negativtest prüft sechs Nicht-Objekt-Varianten. `cp1-runtime` wurde **SKIPPED**; echte UE-5.8-Runtime bleibt BLOCKED/UNOBSERVED.
+
+---
+
+## CQ-2026-10-23-016 — Build.version eindeutig und UTF-8-sicher auswerten
+
+**Iteration:** Runner-Versiondatei-Integrität · **Kategorie:** P0 / Sicherheit / Fail-Closed  
+**Status:** IMPLEMENTED; vollständige GitHub-CI auf dem neuen HEAD noch zu prüfen.
+
+### Beobachtung
+Die UE-Readiness brach bei ungültigen UTF-8-Bytes mit unbehandeltem UnicodeDecodeError ab. Doppelte JSON-Schlüssel konnten widersprüchliche MajorVersion-Angaben durch den letzten Wert still überschreiben und so 5.8 melden, obwohl die Datei mehrdeutig war. Beide Fehler wurden mit isolierten lokalen Negativfällen reproduziert.
+
+### Verbesserungsvorschlag
+JSON-Duplikate beim Einlesen ausdrücklich zurückweisen und Dekodierfehler als kontrolliertes FAIL melden. Regressionen für ungültiges UTF-8, doppelte Schlüssel (auch verschachtelt) und eine weiterhin gültige 5.8-Version in der bereits verpflichtend eingebundenen Runner-Testdatei ergänzen.
+
+### Grund
+Maschinenidentität und Engine-Version dürfen nicht aus mehrdeutigen oder unlesbaren Daten bestätigt werden. Eine geordnete Ablehnung ist überprüfbar und schützt die nachfolgenden Runtime-Gates vor falschen Voraussetzungen.
+
+### Wirkung
+Malformed-Versiondateien werden ohne Ausnahme abgelehnt. Gültige eindeutige 5.8-Versionen bleiben akzeptiert. Kein echter UE-Build, kein CP1-Runtime-PASS, keine Änderung der Runner-Sicherheitsbedingungen oder des Hauptzweigs.
+
+### Technischer Effekt
+`Scripts/runner_readiness.py`: strikter JSON-Objektschlüssel-Parser und UnicodeError-Behandlung. `Scripts/tests/test_runner_evidence_binding.py`: drei neue Testmethoden mit vier negativen und einem positiven Teilfall. CI-Einbindung über vorhandenes `Scripts/ci_verify.py`.
