@@ -848,3 +848,27 @@ Malformed-Versiondateien werden ohne Ausnahme abgelehnt. Gültige eindeutige 5.8
 
 ### Technischer Effekt
 `Scripts/runner_readiness.py`: strikter JSON-Objektschlüssel-Parser und UnicodeError-Behandlung. `Scripts/tests/test_runner_evidence_binding.py`: drei neue Testmethoden mit vier negativen und einem positiven Teilfall. CI-Einbindung über vorhandenes `Scripts/ci_verify.py`.
+
+
+---
+
+## CQ-2026-10-24-017 — Strikte JSON-Zahlen im UE-Runner-Readiness-Vertrag
+
+**Iteration:** Runner-JSON-Konformität · **Kategorie:** P0 / Integrität / Fail-Closed  
+**Status:** IMPLEMENTED auf `fix/runner-json-nonfinite-20261024-0038`; lokale isolierte Parser-Prüfung 7/7 PASS, vollständige GitHub-CI noch separat zu prüfen.  
+**Ausgangs-HEAD:** `a2d13d5d953bf88644e9b5ef8d922f18978216da` (PR #15, gestapelt; `main` unverändert).
+
+### Beobachtung
+`json.loads` akzeptiert standardmäßig `NaN`, `Infinity` und `-Infinity`, obwohl diese Konstanten kein gültiges JSON sind. Die bisherige `read_engine_version`-Prüfung kontrollierte Versionstypen und doppelte Schlüssel, konnte aber ungültige Metadaten still tolerieren.
+
+### Verbesserungsvorschlag
+Den vorhandenen Parser mit `parse_constant` auf strikt endliche JSON-Werte beschränken. Nicht normgerechte Konstanten als `ValueError` an die bereits vorhandene kontrollierte FAIL-Behandlung übergeben. Vier negative Teilfälle und einen positiven Metadatenfall in die bestehende CI-verdrahtete Testdatei aufnehmen.
+
+### Grund
+Eine Runner-Bereitschaft darf nur auf gültigen, eindeutigen Maschinendaten beruhen. Eine ungültige Versiondatei darf keinen Readiness-PASS ermöglichen, auch wenn Major/Minor zufällig 5.8 ergeben.
+
+### Wirkung
+Der Parser meldet bei nicht endlichen Konstanten ein kontrolliertes FAIL. Die vorherige Duplikat-, Unicode- und Formprüfung bleibt erhalten. Kein echter UE-5.8-Lauf, kein Gameplay-Nachweis, keine Änderung an Runner-Labels, Branchschutz, Secrets oder `main`.
+
+### Technischer Effekt
+`Scripts/runner_readiness.py`: `parse_constant`-Ablehnung. `Scripts/tests/test_runner_evidence_binding.py`: zwei neue Testmethoden mit vier negativen und einem positiven Fall. Die Tests sind bereits durch `Scripts/ci_verify.py` und `Scripts/tests/test_prerelease_ci_wiring.py` in der Validate-Pflichtprüfung verankert. Lokale isolierte Parser-Reproduktion: 7/7 PASS; Repository-Gesamtprüfung wird über GitHub Actions nachgeholt.
