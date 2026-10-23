@@ -6,7 +6,7 @@
 
 **Kategorie:** P0 / Runner / Sicherheit / Regression  
 **Priorität:** P0  
-**Status:** IMPLEMENTIERT; GitHub-Prüflauf auf dem Entwicklungszweig ausstehend  
+**Status:** IMPLEMENTIERT; GitHub-Validate und Quality Guard auf geprüftem HEAD `40f94213d732cf5349fd8c97096a2e8d6a193d5b` PASS  
 **Nutzen:** 9/10 · **Änderungsrisiko:** niedrig
 
 ### Beobachtung
@@ -21,5 +21,5 @@ Der Readiness-Fehler darf nicht mit einem CP1-Gameplay-Fehler verwechselt werden
 ### Wirkung und Fertig, wenn
 - Nicht-Objekt-`Build.version` ergibt `FAIL` ohne Ausnahme
 - sechs neue Negativfälle und vorhandene Runner-Bindungstests bestehen
-- `ci_verify.py`, `repository-quality` und Iteration Guard auf dem tatsächlichen PR-HEAD PASS
+- `ci_verify.py`, `repository-quality` und Iteration Guard auf dem geprüften HEAD PASS: [Validate](https://github.com/provoware/bunkergame/actions/runs/39954719607), [Quality Guard](https://github.com/provoware/bunkergame/actions/runs/39954719562)
 - ein echter UE-5.8-Lauf wird erst mit eigener Runtime-Evidence bewertet
