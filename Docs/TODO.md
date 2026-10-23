@@ -119,7 +119,7 @@ Bei erstem echten Build-/Runtime-Fehler:
 
 ## P0.2 — GitHub Self-hosted UE-5.8-Runner
 
-**Vorbereitete P0-Teilkorrektur (23.10.2026, Entwicklungszweig `fix/runner-version-shape-20261023-1435`):** Nicht-Objekt-`Build.version` wird vor `.get()` kontrolliert als FAIL erkannt. Sechs Negativfälle und die bereits vorhandenen Runner-Bindungstests sind im zentralen Validate-Lauf verdrahtet. **Status: IMPLEMENTED, bis CI am endgültigen SHA geprüft ist.** Dies ersetzt weder einen echten UE-5.8-Runner noch den CP1-Lauf. Nachweis: Entwurfs-PR (nach Erstellung), `Scripts/tests/test_runner_evidence_binding.py` und `Scripts/tests/test_prerelease_ci_wiring.py`.
+**Vorbereitete P0-Teilkorrektur (23.10.2026, Entwicklungszweig `fix/runner-version-shape-20261023-1435`):** Nicht-Objekt-`Build.version` wird vor `.get()` kontrolliert als FAIL erkannt. Sechs Negativfälle und die bereits vorhandenen Runner-Bindungstests sind im zentralen Validate-Lauf verdrahtet. **Status: IMPLEMENTED; GitHub-Validate und Quality Guard auf HEAD `40f94213d732cf5349fd8c97096a2e8d6a193d5b` PASS (CI: `39954719607` / `39954719562`).** Dies ersetzt weder einen echten UE-5.8-Runner noch den CP1-Lauf. Nachweis: Entwurfs-PR (nach Erstellung), `Scripts/tests/test_runner_evidence_binding.py` und `Scripts/tests/test_prerelease_ci_wiring.py`.
 
 
 
