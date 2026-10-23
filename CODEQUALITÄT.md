@@ -847,4 +847,4 @@ Maschinenidentität und Engine-Version dürfen nicht aus mehrdeutigen oder unles
 Malformed-Versiondateien werden ohne Ausnahme abgelehnt. Gültige eindeutige 5.8-Versionen bleiben akzeptiert. Kein echter UE-Build, kein CP1-Runtime-PASS, keine Änderung der Runner-Sicherheitsbedingungen oder des Hauptzweigs.
 
 ### Technischer Effekt
-\`Scripts/runner_readiness.py\`: strikter JSON-Objektschlüssel-Parser und UnicodeError-Behandlung. \`Scripts/tests/test_runner_evidence_binding.py\`: drei neue Testmethoden mit vier negativen und einem positiven Teilfall. CI-Einbindung über vorhandenes \`Scripts/ci_verify.py\`.
+`Scripts/runner_readiness.py`: strikter JSON-Objektschlüssel-Parser und UnicodeError-Behandlung. `Scripts/tests/test_runner_evidence_binding.py`: drei neue Testmethoden mit vier negativen und einem positiven Teilfall. CI-Einbindung über vorhandenes `Scripts/ci_verify.py`.
