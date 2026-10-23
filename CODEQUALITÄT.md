@@ -872,3 +872,8 @@ Der Parser meldet bei nicht endlichen Konstanten ein kontrolliertes FAIL. Die vo
 
 ### Technischer Effekt
 `Scripts/runner_readiness.py`: `parse_constant`-Ablehnung. `Scripts/tests/test_runner_evidence_binding.py`: zwei neue Testmethoden mit vier negativen und einem positiven Fall. Die Tests sind bereits durch `Scripts/ci_verify.py` und `Scripts/tests/test_prerelease_ci_wiring.py` in der Validate-Pflichtprüfung verankert. Lokale isolierte Parser-Reproduktion: 7/7 PASS; Repository-Gesamtprüfung wird über GitHub Actions nachgeholt.
+
+
+### Nachträglicher GitHub-CI-Nachweis zu CQ-2026-10-24-017 (24.10.2026)
+
+**Geprüfter Code-/Dokumentations-HEAD:** `4f70738799bc75431af5ff19ad70a065f47d5caa`. **Validate:** PASS ([Lauf 40035142309](https://github.com/provoware/bunkergame/actions/runs/40035142309)), `CI_VERIFY: PASS` mit 27 Runner-Bindungs-Tests. **Quality Guard:** PASS ([Lauf 40035142335](https://github.com/provoware/bunkergame/actions/runs/40035142335)), 137 Python-Tests und `ITERATION_GUARD: PASS`. **UE-5.8-CP1:** SKIPPED ([Lauf 40035142370](https://github.com/provoware/bunkergame/actions/runs/40035142370)); kein Runtime-PASS. Dieser append-only Nachtrag liegt in einem späteren Dokumentations-Commit; dessen CI muss erneut separat geprüft werden.
