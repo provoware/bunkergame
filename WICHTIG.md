@@ -6,7 +6,7 @@
 
 **Kategorie:** P0 / Runtime-Gate / Dateiintegrität
 **Priorität:** P0
-**Status:** IMPLEMENTED auf Entwicklungszweig; GitHub-CI noch zu prüfen; Unreal-5.8-Runtime BLOCKED.
+**Status:** IMPLEMENTED auf Entwicklungszweig; GitHub-CI auf Code-HEAD 6e56fd6d7648e3e07367c6c525ff17bdb1a36a12 PASS (Validate #40078953659, Quality #40078953654); finaler Dokumentations-HEAD separat zu prüfen; Unreal-5.8-Runtime BLOCKED.
 **Nutzen:** 8/10 · **Änderungsrisiko:** niedrig bis mittel
 
 ### Beobachtung
