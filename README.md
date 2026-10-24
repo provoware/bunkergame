@@ -23,7 +23,7 @@ BUNKER BEATS wird als **beweisorientiertes Unreal-Engine-Projekt** entwickelt: E
 | Erster Gameplay-Slice | 🔵 | geplant | Interaction → Task → Ability → XP |
 
 > [!IMPORTANT]
-> **CP1 ist noch nicht GREEN.** Ohne echten Lauf mit Unreal Engine 5.8 bleibt der Runtime-Status `BLOCKED` bzw. `RUNTIME_NOT_STARTED`. Statische Tests dürfen diesen Zustand niemals zu PASS hochstufen.
+> **CP1 ist noch nicht GREEN.** Ohne echten Lauf mit Unreal Engine 5.8 bleibt der Runtime-Status `BLOCKED` bzw. `RUNTIME_NOT_STARTED`. Statische Tests dürfen diesen Zustand niemals zu PASS hochstufen. Der CP1-Nachweis-Lesepfad prüft auf dem Entwicklungszweig zusätzlich striktes, begrenztes JSON; auch das ist kein Runtime-PASS.
 
 ---
 

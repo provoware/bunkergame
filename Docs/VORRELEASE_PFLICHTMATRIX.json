@@ -82,10 +82,12 @@
       "area": "security",
       "status": "IMPLEMENTED",
       "source_refs": [
-        "Scripts/cp1_runtime_evidence_contract.py"
+        "Scripts/cp1_runtime_evidence_contract.py",
+        "Scripts/cp1_gate_runtime.py",
+        "Scripts/tests/test_cp1_gate_runtime_loader.py"
       ],
       "requirement": "Frische Runtime-Evidence",
-      "next_action": "Prüfen und Beleg ergänzen."
+      "next_action": "Hosted-Regression des strikten JSON-Lesepfads nachweisen; anschließend echte frische UE-5.8-Evidence auf dem Zielrunner prüfen."
     },
     {
       "id": "GAME_END_TO_END",
@@ -262,10 +264,11 @@
       "area": "tests",
       "status": "IMPLEMENTED",
       "source_refs": [
-        ".github/workflows/quality-guard.yml"
+        ".github/workflows/quality-guard.yml",
+        "Scripts/tests/test_cp1_gate_runtime_loader.py"
       ],
       "requirement": "Regressionstests",
-      "next_action": "Prüfen und Beleg ergänzen."
+      "next_action": "Acht neue CP1-Lesepfad-Regressionen in Validate/Quality Guard am finalen PR-HEAD prüfen."
     },
     {
       "id": "CI_UNREAL",

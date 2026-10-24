@@ -20,16 +20,45 @@ EVIDENCE = ROOT / "Diagnostics/Runtime/CP1_runtime_evidence.json"
 TELEMETRY = ROOT / TELEMETRY_RELATIVE_PATH
 
 
+MAX_JSON_BYTES = 4 * 1024 * 1024  # CP1 evidence and telemetry are small JSON records.
+
+
+def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def reject_non_finite_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON constant: {value}")
+
+
 def load_json_file(path: Path) -> tuple[dict | None, bytes | None, str | None]:
+    """Read only bounded, unambiguous JSON; never certify malformed CP1 evidence."""
+    label = str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else path.name
+    if path.is_symlink():
+        return None, None, f"symbolic link is not allowed: {label}"
     if not path.is_file():
-        return None, None, f"missing file: {path.relative_to(ROOT)}"
+        return None, None, f"missing file: {label}"
     try:
-        raw = path.read_bytes()
-        data = json.loads(raw.decode("utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        return None, None, f"invalid JSON file {path.relative_to(ROOT)}: {exc}"
+        if path.stat().st_size > MAX_JSON_BYTES:
+            return None, None, f"JSON file exceeds {MAX_JSON_BYTES} bytes: {label}"
+        with path.open("rb") as handle:
+            raw = handle.read(MAX_JSON_BYTES + 1)
+        if len(raw) > MAX_JSON_BYTES:
+            return None, None, f"JSON file exceeds {MAX_JSON_BYTES} bytes: {label}"
+        data = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=reject_duplicate_keys,
+            parse_constant=reject_non_finite_constant,
+        )
+    except (OSError, UnicodeError, ValueError) as exc:
+        return None, None, f"invalid JSON file {label}: {exc}"
     if not isinstance(data, dict):
-        return None, raw, f"JSON root is not an object: {path.relative_to(ROOT)}"
+        return None, raw, f"JSON root is not an object: {label}"
     return data, raw, None
 
 
