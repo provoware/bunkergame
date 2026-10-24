@@ -877,3 +877,27 @@ Der Parser meldet bei nicht endlichen Konstanten ein kontrolliertes FAIL. Die vo
 ### Nachträglicher GitHub-CI-Nachweis zu CQ-2026-10-24-017 (24.10.2026)
 
 **Geprüfter Code-/Dokumentations-HEAD:** `4f70738799bc75431af5ff19ad70a065f47d5caa`. **Validate:** PASS ([Lauf 40035142309](https://github.com/provoware/bunkergame/actions/runs/40035142309)), `CI_VERIFY: PASS` mit 27 Runner-Bindungs-Tests. **Quality Guard:** PASS ([Lauf 40035142335](https://github.com/provoware/bunkergame/actions/runs/40035142335)), 137 Python-Tests und `ITERATION_GUARD: PASS`. **UE-5.8-CP1:** SKIPPED ([Lauf 40035142370](https://github.com/provoware/bunkergame/actions/runs/40035142370)); kein Runtime-PASS. Dieser append-only Nachtrag liegt in einem späteren Dokumentations-Commit; dessen CI muss erneut separat geprüft werden.
+
+
+---
+
+## CQ-2026-10-24-018 — CP1-Gate liest Laufzeitnachweise fail-closed
+
+**Iteration:** CP1-Runtime-JSON-Integrität · **Kategorie:** P0 / Sicherheit / Evidence  
+**Status:** IMPLEMENTED auf `fix/cp1-evidence-json-strict-20261024-0536`; GitHub-CI und echter UE-5.8-Lauf noch zu beobachten.  
+**Ausgangs-HEAD:** `91a822830bcec14d8ab1c3c13128eb2c3d6fc044` (gestapelter Entwurfs-PR #16; `main` unverändert).
+
+### Beobachtung
+Der CP1-Gate-Lesepfad verwendete `json.loads` ohne Duplikatschlüssel- und Nichtendlichkeitsprüfung. Ein synthetisches JSON `{"status":"RED","status":"GREEN"}` wird von Python standardmäßig zu `{"status":"GREEN"}` reduziert. Zudem fehlten Größenbegrenzung und Symlink-Sperre. Das ist ein konkretes Integritätsrisiko für Runtime-Evidence und Telemetrie.
+
+### Verbesserungsvorschlag
+Beide Dateien vor dem eigentlichen CP1-Vertrag strikt laden: eindeutige JSON-Schlüssel, endliche JSON-Konstanten, UTF-8, kein Symlink, maximal 4 MiB; Rohbytes für den SHA-256-Abgleich erhalten. Acht Regressionstestmethoden verbindlich in Validate aufnehmen.
+
+### Grund
+Widersprüchliche oder unkontrollierte Eingabedateien dürfen niemals Grundlage einer technischen CP1-Freigabe sein. Die Prüfung bleibt rein lesend und verändert keine Laufzeitdateien.
+
+### Wirkung und Risiko
+Ungültige Eingaben liefern kontrolliert BLOCKED. Der gültige Normalfall bleibt unverändert. Die 4-MiB-Grenze ist bewusst konservativ und muss bei realen, nachweislich größeren Telemetriedateien fachlich begründet angepasst werden. Symlink-Prüfung verhindert übliche Umleitungen, ist keine vollständige Absicherung gegen zeitgleiche Dateiaustausch-Angriffe.
+
+### Technischer Effekt
+`Scripts/cp1_gate_runtime.py`, `Scripts/tests/test_cp1_gate_runtime_loader.py`, `Scripts/ci_verify.py`, `Scripts/tests/test_prerelease_ci_wiring.py`; Pflichtmatrix, Runtime-Dokumentation, TODO, CHANGELOG und README synchronisiert. Synthetische Regressionstests beweisen **keinen** Unreal-5.8-Lauf; CP1 bleibt BLOCKED/UNOBSERVED.
