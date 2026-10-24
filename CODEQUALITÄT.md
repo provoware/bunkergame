@@ -930,3 +930,27 @@ Auf Unix wird ein letzter Symlink-Austausch kontrolliert abgewiesen, ein FIFO bl
 ### Nachträglicher GitHub-CI-Nachweis zu CQ-2026-10-24-019 (24.10.2026)
 
 **Geprüfter Code-/Doku-HEAD:** `6e56fd6d7648e3e07367c6c525ff17bdb1a36a12`. **PASS:** [Validate #40078953659](https://github.com/provoware/bunkergame/actions/runs/40078953659), 11 CP1-Loader-Tests; **PASS:** [Quality Guard #40078953654](https://github.com/provoware/bunkergame/actions/runs/40078953654), 148 Python-Tests und Iteration Guard; **SKIPPED:** [UE-5.8-Runtime #40078953633](https://github.com/provoware/bunkergame/actions/runs/40078953633). Späterer Dokumentations-HEAD braucht eigene CI-Evidence; kein CP1-Runtime-PASS.
+
+---
+
+## CQ-2026-10-24-020 — Tiefe CP1-JSON-Nachweise fail-closed behandeln
+
+**Iteration:** JSON-Parser-Rekursion · **Kategorie:** P0 / Evidence / Robustheit  
+**Status:** IMPLEMENTED auf `fix/cp1-json-recursion-20261024-1537`; Hosted-CI und UE-Runtime getrennt auszuweisen.  
+**Ausgangs-HEAD:** `ade1f8e5f1a1e8f3895cf1e5b3a3b86f9845c5ca` (gestapelte PR #18; `main` unverändert).
+
+### Beobachtung
+Ein syntaktisch korrektes JSON mit 20.000 verschachtelten Arrays oder Objekten liegt weit unter 4 MiB, erzeugt bei Python `json.loads` jedoch `RecursionError`. Der CP1-Lesepfad fing nur `OSError`, `UnicodeError` und `ValueError` ab und konnte deshalb mit Traceback abbrechen.
+
+### Änderung / Wirkungsprognose
+`RecursionError` in der bestehenden kontrollierten Fehlerbehandlung aufnehmen. Einen neuen, verpflichtend über `Scripts/ci_verify.py` verdrahteten Regressionstest mit zwei echten Parser-Grenzfällen ergänzen. Prognose: Aus unkontrolliertem Abbruch wird ein nachvollziehbarer BLOCKED-Befund; gültige CP1-Dateien bleiben unverändert lesbar.
+
+### Risiken / Grenzen
+Keine Änderung an Runtime-Vertrag, Hash-Bindung, Runner-Zugriff oder Gameplay. Die synthetischen Tests beweisen keinen UE-5.8-Lauf. Kein künstliches Anheben der Python-Rekursionstiefe. Der Effekt ist erst nach CI auf dem finalen HEAD als GitHub-PASS auszuweisen.
+
+### Technischer Effekt
+`Scripts/cp1_gate_runtime.py`, `Scripts/tests/test_cp1_gate_runtime_loader.py`; Pflichtmatrix, TODO, CHANGELOG und WICHTIG synchronisiert. **Nächster Engpass bleibt:** Ruleset und vertrauenswürdiger UE-5.8-Runner, danach echter CP1.
+
+### Nachträglicher CI-Nachweis zu CQ-2026-10-24-020 (24.10.2026)
+
+**Geprüfter Code-/Doku-HEAD:** `2a35870e998911d9c3cb6b73f2f80c10cdfd5f66`. **PASS:** [Validate #40099100013](https://github.com/provoware/bunkergame/actions/runs/40099100013), CP1-Loader 12/12, `CI_VERIFY: PASS`, `VORRELEASE_MATRIX: PASS`. **PASS:** [Quality Guard #40099100020](https://github.com/provoware/bunkergame/actions/runs/40099100020), 149/149 Python-Tests und Iteration Guard. **SKIPPED:** [UE-5.8-Runtime #40099100001](https://github.com/provoware/bunkergame/actions/runs/40099100001). **FAIL (unabhängig):** [P0-Infrastrukturbeobachter #40082770442](https://github.com/provoware/bunkergame/actions/runs/40082770442) auf `main`, erwartetes Ruleset fehlt. Dieser Dokumentations-Nachtrag benötigt eigene CI-Evidence; kein CP1-Runtime-PASS.

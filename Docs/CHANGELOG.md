@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-24 — CP1-JSON-Rekursion kontrolliert abweisen (Entwicklungszweig)
+
+- P0: `RecursionError` beim Lesen stark verschachtelter Nachweis-/Telemetrie-JSON als kontrollierten ungültigen Nachweis behandeln statt Python-Traceback.
+- Ein neuer Regressionstest mit zwei Grenzfällen (20.000 Ebenen Array bzw. Objekt); bestehender gültiger Normalfall unverändert.
+- Status: IMPLEMENTED; GitHub Validate #40099100013 und Quality Guard #40099100020 auf Code-HEAD `2a35870e998911d9c3cb6b73f2f80c10cdfd5f66` PASS. Dokumentations-HEAD separat zu prüfen; keine UE-5.8-Runtime-Evidence, kein Merge, kein Release.
+
 ## 2026-10-24 — CP1-Evidence-Dateiaustausch beim Öffnen verhindern (Entwicklungszweig)
 
 - P0: Nach Vorabprüfung nicht mehr blind `Path.open()` verwenden; Deskriptor mit `O_NOFOLLOW`/`O_NONBLOCK` öffnen und per `fstat` regulären Dateityp sowie 4-MiB-Grenze kontrollieren.
