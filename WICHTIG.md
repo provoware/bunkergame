@@ -2,24 +2,24 @@
 
 > Genau ein priorisierter Vorschlag. Historische Vorschläge stehen append-only in `CODEQUALITÄT.md`.
 
-## W-2026-10-24-017 — Ungültige JSON-Zahlen in UE-Versiondateien abweisen
+## W-2026-10-24-018 — CP1-Laufzeitnachweise nur aus eindeutigem JSON einlesen
 
-**Kategorie:** P0 / Runner-Readiness / Evidence-Integrität  
+**Kategorie:** P0 / Runtime-Gate / Integrität  
 **Priorität:** P0  
-**Status:** IMPLEMENTED; isolierte Parserprüfung 7/7 PASS und GitHub Validate/Quality Guard auf Code-HEAD `4f70738799bc75431af5ff19ad70a065f47d5caa` PASS (24.10.2026); UE-5.8-Runtime SKIPPED/BLOCKED, finale Dokumentations-CI separat zu prüfen.  
-**Nutzen:** 7/10 · **Änderungsrisiko:** niedrig
+**Status:** IMPLEMENTED auf Entwicklungszweig; GitHub-Validate/Quality Guard und UE-Runtime noch getrennt zu prüfen.  
+**Nutzen:** 8/10 · **Änderungsrisiko:** niedrig bis mittel
 
 ### Beobachtung
-Pythons Standard-JSON-Parser akzeptiert die nicht normgerechten Werte `NaN`, `Infinity` und `-Infinity` auch in verschachtelten Metadaten. Die bisherige Runner-Versionprüfung konnte dadurch ein ungültiges `Build.version` als gültige UE-5.8-Readiness akzeptieren.
+`Scripts/cp1_gate_runtime.py` las die beiden für das CP1-Gate entscheidenden JSON-Dateien mit Pythons tolerantem Standardparser. Doppelte Schlüssel konnten widersprüchliche Angaben überdecken; `NaN`/`Infinity` wurden trotz ungültigem JSON akzeptiert. Die Dateigröße war unbegrenzt und symbolische Links wurden verfolgt.
 
 ### Verbesserungsvorschlag
-Nicht endliche JSON-Konstanten bereits beim Einlesen konsequent als kontrolliertes FAIL zurückweisen. Vier Negativfälle und einen gültigen Metadaten-Normalfall in die bereits verpflichtende Runner-Testdatei aufnehmen.
+Laufzeitnachweis und Telemetrie bereits beim Einlesen strikt und einheitlich prüfen: doppelte Schlüssel, nicht endliche Zahlen, ungültiges UTF-8, symbolische Links und Dateien über 4 MiB kontrolliert abweisen. Den gültigen Objekt-Normalfall und acht Testmethoden in den verpflichtenden Validate-Lauf aufnehmen.
 
 ### Grund
-Ein Maschinenprofil darf nur aus syntaktisch gültigem, eindeutigem JSON abgeleitet werden. Der Readiness-Status ist eine Vorbedingung für spätere Runtime-Prüfungen und darf ungültige Eingabedaten nicht still akzeptieren.
+Ein CP1-GREEN darf niemals aus mehrdeutigen oder unkontrolliert großen Eingabedaten entstehen. Diese Härtung betrifft ausschließlich den Nachweis-Lesepfad; sie erzeugt keinen Unreal-Runtime-Erfolg.
 
 ### Wirkung und Abnahmekriterien
-- `NaN`, `Infinity` und `-Infinity` werden auch in verschachtelten Feldern ohne Absturz abgewiesen.
-- Endliche numerische Metadaten sowie der UE-5.8-Normalfall bleiben akzeptiert.
-- Zentrale Validate- und Quality-Guard-Prüfungen müssen am finalen GitHub-HEAD erfolgreich sein.
-- CP1-Runtime, Spielverläufe und Main-Branchschutz bleiben ausdrücklich eigene offene Pflichtprüfungen.
+- Ungültige CP1-Nachweis- und Telemetriedateien führen kontrolliert zu BLOCKED, ohne Ausnahme.
+- Gültiges JSON bleibt mit unveränderten Rohbytes für die SHA-256-Prüfung lesbar.
+- Acht Regressionstestmethoden laufen in Validate und Quality Guard.
+- GitHub-CI am finalen PR-HEAD ist separat nachzuweisen; UE 5.8, CP1, Gameplay und Branchschutz bleiben offen.
