@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-24 — CP1-Runtime-Gate gegen mehrdeutige JSON-Dateien absichern (Entwicklungszweig)
+
+- P0: Laufzeitnachweis und Telemetrie beim Einlesen strikt auf eindeutige Schlüssel, endliche JSON-Zahlen, UTF-8, reguläre Datei ohne Symlink und maximal 4 MiB prüfen.
+- Acht neue Regressionstestmethoden einschließlich gültigem Normalfall; verpflichtend in `Scripts/ci_verify.py` und CI-Wiring-Vertrag.
+- Status: IMPLEMENTED, Hosted-CI und echter Unreal-5.8-Lauf getrennt auswerten. Kein CP1-Runtime-PASS, kein Merge, kein Release.
+
+---
+
 ## 2026-10-24 — Nicht endliche JSON-Konstanten in UE Build.version zurückweisen (Entwicklungszweig)
 
 - P0: `NaN`, `Infinity` und `-Infinity` auch in verschachtelten Versionmetadaten als ungültiges JSON kontrolliert abweisen.
