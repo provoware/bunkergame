@@ -901,3 +901,32 @@ Ungültige Eingaben liefern kontrolliert BLOCKED. Der gültige Normalfall bleibt
 
 ### Technischer Effekt
 `Scripts/cp1_gate_runtime.py`, `Scripts/tests/test_cp1_gate_runtime_loader.py`, `Scripts/ci_verify.py`, `Scripts/tests/test_prerelease_ci_wiring.py`; Pflichtmatrix, Runtime-Dokumentation, TODO, CHANGELOG und README synchronisiert. Synthetische Regressionstests beweisen **keinen** Unreal-5.8-Lauf; CP1 bleibt BLOCKED/UNOBSERVED.
+
+
+---
+
+## CQ-2026-10-24-019 — CP1-Dateideskriptor statt Vorab-Dateipfad vertrauen
+
+**Iteration:** CP1-Evidence-Dateiaustausch · **Kategorie:** P0 / Evidence / Integrität
+**Status:** IMPLEMENTED auf `fix/cp1-evidence-file-race-20261024-1038`; GitHub-CI und UE-Runtime noch getrennt zu belegen.
+**Ausgangs-HEAD:** `c2335035ef91cc4721e40c12c2de14145e40ee0a` (gestapelter Entwurfs-PR #17; `main` unverändert).
+
+### Beobachtung
+`Path.is_symlink()`, `is_file()` und `stat()` vor `Path.open()` schützen nicht gegen einen Austausch der Datei zwischen Prüfung und Öffnen (TOCTOU). Eine kurzfristig ersetzte FIFO-Datei könnte zudem den Gate-Lesepfad blockieren.
+
+### Verbesserungsvorschlag
+Mit `os.open` und verfügbaren `O_NOFOLLOW`-/`O_NONBLOCK`-Flags öffnen; die wirklich geöffnete Datei mit `os.fstat` und `stat.S_ISREG` prüfen, dann erst begrenzt lesen. Drei gezielte Regressionstestmethoden für Symlink-Austausch, FIFO-Austausch und Verzeichnisablehnung ergänzen.
+
+### Grund
+Nur der bereits geöffnete Deskriptor ist die verlässliche Grundlage für Größen- und Dateitypprüfung. Die vorhandene Integritätsprüfung der unveränderten Rohbytes bleibt maßgeblich.
+
+### Wirkung
+Auf Unix wird ein letzter Symlink-Austausch kontrolliert abgewiesen, ein FIFO blockiert den Test nicht. Auf Plattformen ohne `O_NOFOLLOW` ist kein vollständiger Schutz gegen zeitgleichen Symlink-Austausch behauptet. Kein UE-5.8-Runtime-Nachweis und keine Änderung an Runner-Rechten, Branchschutz oder Gameplay.
+
+### Technischer Effekt
+`Scripts/cp1_gate_runtime.py` und `Scripts/tests/test_cp1_gate_runtime_loader.py`. Die Testdatei wird bereits durch `Scripts/ci_verify.py` verpflichtend ausgeführt. CI-Nachweis am finalen HEAD bleibt gesondert auszuweisen.
+
+
+### Nachträglicher GitHub-CI-Nachweis zu CQ-2026-10-24-019 (24.10.2026)
+
+**Geprüfter Code-/Doku-HEAD:** `6e56fd6d7648e3e07367c6c525ff17bdb1a36a12`. **PASS:** [Validate #40078953659](https://github.com/provoware/bunkergame/actions/runs/40078953659), 11 CP1-Loader-Tests; **PASS:** [Quality Guard #40078953654](https://github.com/provoware/bunkergame/actions/runs/40078953654), 148 Python-Tests und Iteration Guard; **SKIPPED:** [UE-5.8-Runtime #40078953633](https://github.com/provoware/bunkergame/actions/runs/40078953633). Späterer Dokumentations-HEAD braucht eigene CI-Evidence; kein CP1-Runtime-PASS.

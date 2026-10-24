@@ -87,7 +87,7 @@
         "Scripts/tests/test_cp1_gate_runtime_loader.py"
       ],
       "requirement": "Frische Runtime-Evidence",
-      "next_action": "Hosted-Regression des strikten JSON-Lesepfads nachweisen; anschließend echte frische UE-5.8-Evidence auf dem Zielrunner prüfen."
+      "next_action": "GitHub Validate #40078953659 und Quality Guard #40078953654: PASS auf Code-HEAD 6e56fd6d7648e3e07367c6c525ff17bdb1a36a12; echte frische UE-5.8-Evidence und Gate auf vertrauenswürdigem Runner bleiben ausstehend. Plattform ohne O_NOFOLLOW separat absichern."
     },
     {
       "id": "GAME_END_TO_END",

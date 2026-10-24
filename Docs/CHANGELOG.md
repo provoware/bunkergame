@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-24 — CP1-Evidence-Dateiaustausch beim Öffnen verhindern (Entwicklungszweig)
+
+- P0: Nach Vorabprüfung nicht mehr blind `Path.open()` verwenden; Deskriptor mit `O_NOFOLLOW`/`O_NONBLOCK` öffnen und per `fstat` regulären Dateityp sowie 4-MiB-Grenze kontrollieren.
+- Drei neue Regressionstestmethoden für Symlink-Austausch, FIFO-Austausch und Verzeichnisablehnung.
+- Status: IMPLEMENTED; Hosted-CI noch separat nachzuweisen. Auf Systemen ohne `O_NOFOLLOW` keine atomare Symlink-Garantie. Kein UE-5.8-Runtime-PASS, Merge oder Release.
+
+
 ## 2026-10-24 — CP1-Runtime-Gate gegen mehrdeutige JSON-Dateien absichern (Entwicklungszweig)
 
 - P0: Laufzeitnachweis und Telemetrie beim Einlesen strikt auf eindeutige Schlüssel, endliche JSON-Zahlen, UTF-8, reguläre Datei ohne Symlink und maximal 4 MiB prüfen.

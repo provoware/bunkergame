@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from pathlib import Path
 
 from cp1_runtime_evidence_contract import (
@@ -44,9 +46,17 @@ def load_json_file(path: Path) -> tuple[dict | None, bytes | None, str | None]:
     if not path.is_file():
         return None, None, f"missing file: {label}"
     try:
-        if path.stat().st_size > MAX_JSON_BYTES:
-            return None, None, f"JSON file exceeds {MAX_JSON_BYTES} bytes: {label}"
-        with path.open("rb") as handle:
+        # Open the file itself without following a last-moment symlink swap.
+        # O_NONBLOCK also prevents a replaced FIFO from hanging the gate.
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        fd = os.open(path, flags)
+        with os.fdopen(fd, "rb") as handle:
+            opened = os.fstat(handle.fileno())
+            if not stat.S_ISREG(opened.st_mode):
+                return None, None, f"not a regular file: {label}"
+            if opened.st_size > MAX_JSON_BYTES:
+                return None, None, f"JSON file exceeds {MAX_JSON_BYTES} bytes: {label}"
             raw = handle.read(MAX_JSON_BYTES + 1)
         if len(raw) > MAX_JSON_BYTES:
             return None, None, f"JSON file exceeds {MAX_JSON_BYTES} bytes: {label}"

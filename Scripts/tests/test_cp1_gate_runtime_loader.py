@@ -2,9 +2,11 @@
 """Fail-closed JSON loading tests; synthetic input is never Unreal runtime proof."""
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -85,6 +87,54 @@ class CP1GateJSONLoaderTests(unittest.TestCase):
             self.assertIsNone(data)
             self.assertIsNone(raw)
             self.assertIn("missing file", error)
+
+
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "atomic no-follow open unavailable")
+    def test_symlink_swap_between_check_and_open_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "cp1.json"
+            target = root / "redirected.json"
+            path.write_text('{"status":"RED"}', encoding="utf-8")
+            target.write_text('{"status":"GREEN"}', encoding="utf-8")
+            original_open = os.open
+
+            def swap_before_open(filename, flags, *args, **kwargs):
+                path.unlink()
+                path.symlink_to(target)
+                return original_open(filename, flags, *args, **kwargs)
+
+            with mock.patch.object(gate.os, "open", side_effect=swap_before_open):
+                data, raw, error = gate.load_json_file(path)
+            self.assertIsNone(data)
+            self.assertIsNone(raw)
+            self.assertIn("invalid JSON file", error)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"), "FIFO support unavailable")
+    def test_fifo_swap_between_check_and_open_is_rejected_without_blocking(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cp1.json"
+            path.write_text('{"status":"GREEN"}', encoding="utf-8")
+            original_open = os.open
+
+            def swap_before_open(filename, flags, *args, **kwargs):
+                path.unlink()
+                os.mkfifo(path)
+                return original_open(filename, flags, *args, **kwargs)
+
+            with mock.patch.object(gate.os, "open", side_effect=swap_before_open):
+                data, raw, error = gate.load_json_file(path)
+            self.assertIsNone(data)
+            self.assertIsNone(raw)
+            self.assertIn("not a regular file", error)
+
+    def test_directory_is_not_accepted_as_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data, raw, error = gate.load_json_file(Path(tmp))
+            self.assertIsNone(data)
+            self.assertIsNone(raw)
+            self.assertIn("missing file", error)
+
 
 
 if __name__ == "__main__":

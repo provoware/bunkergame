@@ -2,24 +2,25 @@
 
 > Genau ein priorisierter Vorschlag. Historische Vorschläge stehen append-only in `CODEQUALITÄT.md`.
 
-## W-2026-10-24-018 — CP1-Laufzeitnachweise nur aus eindeutigem JSON einlesen
+## W-2026-10-24-019 — CP1-Evidence vor Dateiaustausch beim Öffnen schützen
 
-**Kategorie:** P0 / Runtime-Gate / Integrität  
-**Priorität:** P0  
-**Status:** IMPLEMENTED auf Entwicklungszweig; GitHub-Validate/Quality Guard und UE-Runtime noch getrennt zu prüfen.  
+**Kategorie:** P0 / Runtime-Gate / Dateiintegrität
+**Priorität:** P0
+**Status:** IMPLEMENTED auf Entwicklungszweig; GitHub-CI auf Code-HEAD 6e56fd6d7648e3e07367c6c525ff17bdb1a36a12 PASS (Validate #40078953659, Quality #40078953654); finaler Dokumentations-HEAD separat zu prüfen; Unreal-5.8-Runtime BLOCKED.
 **Nutzen:** 8/10 · **Änderungsrisiko:** niedrig bis mittel
 
 ### Beobachtung
-`Scripts/cp1_gate_runtime.py` las die beiden für das CP1-Gate entscheidenden JSON-Dateien mit Pythons tolerantem Standardparser. Doppelte Schlüssel konnten widersprüchliche Angaben überdecken; `NaN`/`Infinity` wurden trotz ungültigem JSON akzeptiert. Die Dateigröße war unbegrenzt und symbolische Links wurden verfolgt.
+Die bisherige `is_symlink()`-/`is_file()`-/`stat()`-Vorprüfung erfolgte getrennt vom eigentlichen `open()`. Ein zeitgleicher Austausch der Datei zwischen Prüfung und Öffnen konnte unter Linux den Symlink-Schutz umgehen oder einen ersetzten FIFO-Lesepfad blockieren.
 
 ### Verbesserungsvorschlag
-Laufzeitnachweis und Telemetrie bereits beim Einlesen strikt und einheitlich prüfen: doppelte Schlüssel, nicht endliche Zahlen, ungültiges UTF-8, symbolische Links und Dateien über 4 MiB kontrolliert abweisen. Den gültigen Objekt-Normalfall und acht Testmethoden in den verpflichtenden Validate-Lauf aufnehmen.
+Den CP1-Nachweis auf Unix über `O_NOFOLLOW` und `O_NONBLOCK` öffnen; anschließend den tatsächlich geöffneten Dateideskriptor mit `fstat` als reguläre, höchstens 4 MiB große Datei prüfen. Die strikte JSON- und SHA-256-Prüfung beibehalten. Drei Regressionstestmethoden ergänzen.
 
 ### Grund
-Ein CP1-GREEN darf niemals aus mehrdeutigen oder unkontrolliert großen Eingabedaten entstehen. Diese Härtung betrifft ausschließlich den Nachweis-Lesepfad; sie erzeugt keinen Unreal-Runtime-Erfolg.
+Ein CP1-Gate darf die vorab geprüfte Datei nicht mit einer nachträglich ausgetauschten Datei verwechseln. Es dürfen weder Umleitungen noch blockierende Sonderdateien einen Nachweis ersetzen.
 
 ### Wirkung und Abnahmekriterien
-- Ungültige CP1-Nachweis- und Telemetriedateien führen kontrolliert zu BLOCKED, ohne Ausnahme.
-- Gültiges JSON bleibt mit unveränderten Rohbytes für die SHA-256-Prüfung lesbar.
-- Acht Regressionstestmethoden laufen in Validate und Quality Guard.
-- GitHub-CI am finalen PR-HEAD ist separat nachzuweisen; UE 5.8, CP1, Gameplay und Branchschutz bleiben offen.
+- Symlink-Austausch während des Öffnens wird auf Systemen mit `O_NOFOLLOW` kontrolliert abgewiesen.
+- FIFO-Austausch blockiert nicht und führt zu BLOCKED.
+- Gültige JSON-Rohbytes und bestehende Größen-, Duplikat- und Hashprüfungen bleiben unverändert.
+- GitHub Validate/Quality Guard auf dem endgültigen HEAD nachweisen; keine Runtime-Freigabe ohne echten UE-5.8-Lauf.
+- Plattformgrenze: Ohne `O_NOFOLLOW` ist die atomare Symlink-Sperre nicht nachgewiesen und muss separat auf der Zielplattform geprüft werden.
