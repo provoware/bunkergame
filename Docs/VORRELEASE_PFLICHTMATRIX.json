@@ -87,7 +87,7 @@
         "Scripts/tests/test_cp1_gate_runtime_loader.py"
       ],
       "requirement": "Frische Runtime-Evidence",
-      "next_action": "RecursionError-Fix und synthetische Tiefe-Regression (20.000 Array-/Objektebenen) implementiert; Hosted-CI am finalen PR-HEAD noch ausstehend. Echter UE-5.8-Lauf und Plattformprüfung ohne O_NOFOLLOW weiterhin offen."
+      "next_action": "Tief verschachtelte JSON-Evidence fail-closed; Validate #40099100013 und Quality Guard #40099100020 PASS auf Code-HEAD 2a35870e998911d9c3cb6b73f2f80c10cdfd5f66. Neuer Doku-HEAD braucht eigene CI. Echte UE-5.8-Runtime bleibt BLOCKED; Ruleset fehlt laut P0 Observer #40082770442."
     },
     {
       "id": "GAME_END_TO_END",
@@ -268,7 +268,7 @@
         "Scripts/tests/test_cp1_gate_runtime_loader.py"
       ],
       "requirement": "Regressionstests",
-      "next_action": "Neuen CP1-JSON-Tiefentest mit zwei Grenzfällen und bestehende Regressionen in Validate/Quality Guard am finalen HEAD prüfen."
+      "next_action": "CP1-Loader 12/12 und Python-Qualität 149/149 PASS auf Code-HEAD 2a35870e998911d9c3cb6b73f2f80c10cdfd5f66; finalen Doku-HEAD separat prüfen."
     },
     {
       "id": "CI_UNREAL",

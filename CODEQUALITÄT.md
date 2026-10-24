@@ -950,3 +950,7 @@ Keine Änderung an Runtime-Vertrag, Hash-Bindung, Runner-Zugriff oder Gameplay. 
 
 ### Technischer Effekt
 `Scripts/cp1_gate_runtime.py`, `Scripts/tests/test_cp1_gate_runtime_loader.py`; Pflichtmatrix, TODO, CHANGELOG und WICHTIG synchronisiert. **Nächster Engpass bleibt:** Ruleset und vertrauenswürdiger UE-5.8-Runner, danach echter CP1.
+
+### Nachträglicher CI-Nachweis zu CQ-2026-10-24-020 (24.10.2026)
+
+**Geprüfter Code-/Doku-HEAD:** `2a35870e998911d9c3cb6b73f2f80c10cdfd5f66`. **PASS:** [Validate #40099100013](https://github.com/provoware/bunkergame/actions/runs/40099100013), CP1-Loader 12/12, `CI_VERIFY: PASS`, `VORRELEASE_MATRIX: PASS`. **PASS:** [Quality Guard #40099100020](https://github.com/provoware/bunkergame/actions/runs/40099100020), 149/149 Python-Tests und Iteration Guard. **SKIPPED:** [UE-5.8-Runtime #40099100001](https://github.com/provoware/bunkergame/actions/runs/40099100001). **FAIL (unabhängig):** [P0-Infrastrukturbeobachter #40082770442](https://github.com/provoware/bunkergame/actions/runs/40082770442) auf `main`, erwartetes Ruleset fehlt. Dieser Dokumentations-Nachtrag benötigt eigene CI-Evidence; kein CP1-Runtime-PASS.
