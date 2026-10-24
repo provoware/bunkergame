@@ -65,7 +65,7 @@ def load_json_file(path: Path) -> tuple[dict | None, bytes | None, str | None]:
             object_pairs_hook=reject_duplicate_keys,
             parse_constant=reject_non_finite_constant,
         )
-    except (OSError, UnicodeError, ValueError) as exc:
+    except (OSError, UnicodeError, ValueError, RecursionError) as exc:
         return None, None, f"invalid JSON file {label}: {exc}"
     if not isinstance(data, dict):
         return None, raw, f"JSON root is not an object: {label}"

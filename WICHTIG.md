@@ -2,25 +2,25 @@
 
 > Genau ein priorisierter Vorschlag. Historische Vorschläge stehen append-only in `CODEQUALITÄT.md`.
 
-## W-2026-10-24-019 — CP1-Evidence vor Dateiaustausch beim Öffnen schützen
+## W-2026-10-24-020 — Tiefe CP1-JSON-Strukturen kontrolliert zurückweisen
 
-**Kategorie:** P0 / Runtime-Gate / Dateiintegrität
+**Kategorie:** P0 / Runtime-Gate / Robustheit der Nachweisprüfung
 **Priorität:** P0
-**Status:** IMPLEMENTED auf Entwicklungszweig; GitHub-CI auf Code-HEAD 6e56fd6d7648e3e07367c6c525ff17bdb1a36a12 PASS (Validate #40078953659, Quality #40078953654); finaler Dokumentations-HEAD separat zu prüfen; Unreal-5.8-Runtime BLOCKED.
-**Nutzen:** 8/10 · **Änderungsrisiko:** niedrig bis mittel
+**Status:** IMPLEMENTED auf Entwicklungszweig; GitHub-CI noch ausstehend; echter UE-5.8-Lauf BLOCKED.
+**Nutzen:** 7/10 · **Änderungsrisiko:** niedrig
 
 ### Beobachtung
-Die bisherige `is_symlink()`-/`is_file()`-/`stat()`-Vorprüfung erfolgte getrennt vom eigentlichen `open()`. Ein zeitgleicher Austausch der Datei zwischen Prüfung und Öffnen konnte unter Linux den Symlink-Schutz umgehen oder einen ersetzten FIFO-Lesepfad blockieren.
+Auch bei maximal 4 MiB Eingabe können tief verschachtelte JSON-Arrays oder -Objekte `json.loads` zu `RecursionError` bringen. Der bisherige CP1-Loader fängt diese Ausnahme nicht ab: Das Gate bricht mit einem Python-Traceback ab, statt einen kontrollierten BLOCKED-Befund zu liefern.
 
 ### Verbesserungsvorschlag
-Den CP1-Nachweis auf Unix über `O_NOFOLLOW` und `O_NONBLOCK` öffnen; anschließend den tatsächlich geöffneten Dateideskriptor mit `fstat` als reguläre, höchstens 4 MiB große Datei prüfen. Die strikte JSON- und SHA-256-Prüfung beibehalten. Drei Regressionstestmethoden ergänzen.
+`RecursionError` in der bestehenden fail-closed Fehlerbehandlung abfangen und für zwei reale Parser-Grenzfälle (20.000 verschachtelte Arrays und Objekte) Regressionen ergänzen. Keine Rekursionstiefe global verändern und keine zulässigen JSON-Inhalte umdeuten.
 
 ### Grund
-Ein CP1-Gate darf die vorab geprüfte Datei nicht mit einer nachträglich ausgetauschten Datei verwechseln. Es dürfen weder Umleitungen noch blockierende Sonderdateien einen Nachweis ersetzen.
+Ungültige oder nicht verarbeitbare Nachweisdateien dürfen den Prüfer nicht unkontrolliert beenden. Der bestehende gültige Normalfall bleibt unverändert.
 
 ### Wirkung und Abnahmekriterien
-- Symlink-Austausch während des Öffnens wird auf Systemen mit `O_NOFOLLOW` kontrolliert abgewiesen.
-- FIFO-Austausch blockiert nicht und führt zu BLOCKED.
-- Gültige JSON-Rohbytes und bestehende Größen-, Duplikat- und Hashprüfungen bleiben unverändert.
-- GitHub Validate/Quality Guard auf dem endgültigen HEAD nachweisen; keine Runtime-Freigabe ohne echten UE-5.8-Lauf.
-- Plattformgrenze: Ohne `O_NOFOLLOW` ist die atomare Symlink-Sperre nicht nachgewiesen und muss separat auf der Zielplattform geprüft werden.
+- Tiefe JSON-Strukturen liefern einen kontrollierten Fehler mit `None` für Daten und Rohbytes.
+- Vorhandene elf CP1-Ladertests bleiben grün, neuer Test mit zwei Teilfällen ebenfalls.
+- Validate und Quality Guard am finalen HEAD nachweisen.
+- **NEXT BEST ACTION:** echten P0-Ruleset-Schutz und vertrauenswürdigen UE-5.8-Runner nachweisen; CP1 Build/Spawn/Movement/Telemetrie anschließend in einem echten Lauf prüfen.
+- Keine Runtime-Freigabe, kein Merge und kein Release ohne vollständige Gates.

@@ -28,6 +28,20 @@ class CP1GateJSONLoaderTests(unittest.TestCase):
         self.assertEqual(data, {"status": "GREEN", "nested": {"value": 1}})
         self.assertEqual(raw, payload)
 
+    def test_deeply_nested_json_fails_closed_instead_of_crashing(self):
+        # Both shapes are well below the 4-MiB file limit but exceed parser depth.
+        payloads = (
+            b"[" * 20000 + b"0" + b"]" * 20000,
+            b'{"x":' * 20000 + b"0" + b"}" * 20000,
+        )
+        for payload in payloads:
+            with self.subTest(prefix=payload[:5]):
+                data, raw, error = self.load_bytes(payload)
+                self.assertIsNone(data)
+                self.assertIsNone(raw)
+                self.assertIn("invalid JSON file", error)
+                self.assertIn("recursion", error.lower())
+
     def test_duplicate_root_and_nested_keys_fail_closed(self):
         for payload in (
             b'{"status":"RED","status":"GREEN"}',
