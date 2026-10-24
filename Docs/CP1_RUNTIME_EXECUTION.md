@@ -43,3 +43,7 @@ Der Smoke-Test nutzt UE 5.8 `FTestWorldWrapper`, startet `BeginPlay` in einer te
 
 ## Buildstrategie
 Der Runner baut gezielt `BunkerBeatsEditor` in `Development` über das UE-Batch-Buildskript. Das ist für einen Editor-Automationstest präziser und günstiger als einen vollständigen Cook/Stage/Package-Lauf zu erzwingen.
+
+## Sicherheitsvertrag für eingelesene CP1-Nachweise (Entwicklungszweig, 24.10.2026)
+
+`Scripts/cp1_gate_runtime.py` akzeptiert für Laufzeitnachweis und Telemetrie nur UTF-8-kodierte JSON-Objekte ohne doppelte Schlüssel oder `NaN`/`Infinity`/`-Infinity`. Symbolische Links und Dateien über 4 MiB werden vor der Vertragsprüfung abgewiesen. Die unveränderten Rohbytes bleiben für den Telemetrie-SHA-256-Vergleich erhalten. Ein Lesefehler meldet `CP1_GATE: BLOCKED`, keinen falschen Erfolg. Dies ist ein **statischer Sicherheitsvertrag**, kein Ersatz für den echten UE-5.8-CP1-Lauf.
