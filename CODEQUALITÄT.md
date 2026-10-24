@@ -925,3 +925,8 @@ Auf Unix wird ein letzter Symlink-Austausch kontrolliert abgewiesen, ein FIFO bl
 
 ### Technischer Effekt
 `Scripts/cp1_gate_runtime.py` und `Scripts/tests/test_cp1_gate_runtime_loader.py`. Die Testdatei wird bereits durch `Scripts/ci_verify.py` verpflichtend ausgeführt. CI-Nachweis am finalen HEAD bleibt gesondert auszuweisen.
+
+
+### Nachträglicher GitHub-CI-Nachweis zu CQ-2026-10-24-019 (24.10.2026)
+
+**Geprüfter Code-/Doku-HEAD:** `6e56fd6d7648e3e07367c6c525ff17bdb1a36a12`. **PASS:** [Validate #40078953659](https://github.com/provoware/bunkergame/actions/runs/40078953659), 11 CP1-Loader-Tests; **PASS:** [Quality Guard #40078953654](https://github.com/provoware/bunkergame/actions/runs/40078953654), 148 Python-Tests und Iteration Guard; **SKIPPED:** [UE-5.8-Runtime #40078953633](https://github.com/provoware/bunkergame/actions/runs/40078953633). Späterer Dokumentations-HEAD braucht eigene CI-Evidence; kein CP1-Runtime-PASS.
