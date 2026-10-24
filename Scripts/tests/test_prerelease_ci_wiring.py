@@ -17,6 +17,7 @@ REQUIRED = (
     "Scripts/tests/test_prerelease_elements.py",
     "Scripts/tests/test_prerelease_ci_wiring.py",
     "Scripts/tests/test_runner_evidence_binding.py",
+    "Scripts/tests/test_cp1_gate_runtime_loader.py",
 )
 
 
